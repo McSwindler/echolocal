@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/service"
 )
@@ -128,13 +129,24 @@ func init() {
 	// First of the hardware: the boot animation is the only thing the device can say before anything
 	// else works.
 	component.Register(component.Hardware, Get, component.Order(5),
+		component.Needs(board.Ring),
 		component.Supervise(service.Restart(time.Second, 30*time.Second)))
 }
 
 // Get is the ring. There is one, and everything that wants to show something takes a claim on it
 // rather than owning it.
+//
+// It answers on a board with no ring too, with a driver nobody renders: the component is not
+// registered there, so the loop never runs, and the dozen things that show something during a turn
+// go on taking claims without having to ask first. Claims cost nothing and nothing reads them.
 func Get() *Driver {
-	once.Do(func() { shared = NewDriver(New()) })
+	once.Do(func() {
+		if !component.Board().Has(board.Ring) {
+			shared = NewDriver(NewAbsent())
+			return
+		}
+		shared = NewDriver(New())
+	})
 	return shared
 }
 
@@ -178,6 +190,13 @@ func (d *Driver) Close() error {
 // Busy is how anything says the device is working on something. Shared, so several things working at
 // once show as one indication rather than as claims taking turns.
 func (d *Driver) Busy() *Busy { return d.busy }
+
+// Present reports whether this board has a ring. Claims do not need to ask — they are accepted and
+// shown nothing — but something that would do work only to be discarded does.
+func (d *Driver) Present() bool { return d.ring.Present() }
+
+// Present is the same question asked of the claim, for a caller that holds one and not the driver.
+func (c *Claim) Present() bool { return c.d.Present() }
 
 // Name is what it is called when supervised.
 func (d *Driver) Name() string { return "ring" }

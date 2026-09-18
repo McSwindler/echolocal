@@ -294,6 +294,12 @@ func (t *Timers) ring(ctx context.Context) {
 // show draws the soonest timer, or clears the ring when there is none. It sends nothing when the
 // frame has not moved, so the driver is not woken four times a second for a timer with an hour to go.
 func (t *Timers) show() {
+	// A countdown drawn as an arc needs somewhere to draw it. The timers themselves run and ring on
+	// a board with no ring; only the picture of one is missing.
+	if !t.countdown.Present() {
+		return
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

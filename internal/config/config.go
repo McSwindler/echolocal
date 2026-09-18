@@ -19,7 +19,12 @@
 // and the subsystem does not import persistence.
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ygelfand/echolocal/internal/board"
+	"github.com/ygelfand/echolocal/internal/defaults"
+)
 
 // Config is what the device is set to.
 type Config struct {
@@ -36,14 +41,20 @@ type Config struct {
 }
 
 // Defaults is a device nobody has set anything on.
+//
+// The values that are statements about a board rather than choices come from defaults, which has
+// been told which board this is. Everything here is what the file is merged over, so a setting
+// absent from the file is the board's answer and not a Dot's.
 func Defaults() Config {
+	d := defaults.Current()
+
 	return Config{
 		Speaker:    defaultSpeaker(),
-		Microphone: defaultMicrophone(),
-		Ring:       defaultRing(),
+		Microphone: defaultMicrophone(d),
+		Ring:       defaultRing(d),
 		Update:     defaultUpdate(),
 		Bluetooth:  defaultBluetooth(),
-		Diag:       defaultDiag(),
+		Diag:       defaultDiag(d),
 		Media:      defaultMedia(),
 		Sendspin:   defaultSendspin(),
 
@@ -61,6 +72,10 @@ func Defaults() Config {
 type Device struct {
 	Name string
 	Addr string
+
+	// Board is which model this is. Everything that presents the device to Home Assistant reads it
+	// from here rather than detecting again, so there is one answer per process.
+	Board board.Board
 }
 
 // Writer is what Set hands back: one method per part of the device, each with its own settings.

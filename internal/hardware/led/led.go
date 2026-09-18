@@ -71,6 +71,12 @@ func (r *Ring) SetAll(c Color) error {
 type Ring struct {
 	Path string
 
+	// absent is a board with no ring. Writes go nowhere and reads report nothing, rather than
+	// failing: everything that shows something on a ring — a conversation, a failure, a timer —
+	// takes its claim unconditionally, and a device with no ring is one where that says nothing
+	// rather than one where it goes wrong.
+	absent bool
+
 	// last is what was written, so a frame identical to it can be skipped. An animation is a ticker
 	// that redraws whether or not anything moved, and the ring holds what it was given with nothing
 	// driving it — the same property that lets a frame outlive the process.
@@ -82,6 +88,12 @@ type Ring struct {
 }
 
 func New() *Ring { return &Ring{Path: DefaultPath} }
+
+// NewAbsent is the ring on a board that has none. See Ring.absent.
+func NewAbsent() *Ring { return &Ring{absent: true} }
+
+// Present reports whether there is hardware behind this ring.
+func (r *Ring) Present() bool { return !r.absent }
 
 func (r *Ring) path() string {
 	if r.Path == "" {
@@ -97,6 +109,9 @@ func (r *Ring) attr(name string) string { return r.path() + "/" + name }
 func (r *Ring) SetFrame(vals []byte) error {
 	if len(vals) != Channels {
 		return fmt.Errorf("led: need %d channels, got %d", Channels, len(vals))
+	}
+	if r.absent {
+		return nil
 	}
 
 	r.mu.Lock()
@@ -124,6 +139,9 @@ func (r *Ring) Forget() {
 
 // Frame reads back the current frame.
 func (r *Ring) Frame() ([]byte, error) {
+	if r.absent {
+		return make([]byte, Channels), nil
+	}
 	b, err := os.ReadFile(r.attr("frame"))
 	if err != nil {
 		return nil, err
@@ -145,6 +163,9 @@ func (r *Ring) Off() error { return r.Fill(0) }
 
 // Current reads the global drive-current setting.
 func (r *Ring) Current() (int, error) {
+	if r.absent {
+		return 0, nil
+	}
 	b, err := os.ReadFile(r.attr("led_current"))
 	if err != nil {
 		return 0, err
@@ -154,11 +175,17 @@ func (r *Ring) Current() (int, error) {
 
 // SetCurrent sets the global drive current.
 func (r *Ring) SetCurrent(v int) error {
+	if r.absent {
+		return nil
+	}
 	return os.WriteFile(r.attr("led_current"), []byte(strconv.Itoa(v)), 0o644)
 }
 
 // SetBootAnimation toggles the driver's built-in boot animation.
 func (r *Ring) SetBootAnimation(on bool) error {
+	if r.absent {
+		return nil
+	}
 	v := "0"
 	if on {
 		v = "1"

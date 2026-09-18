@@ -7,6 +7,7 @@ import (
 
 	"github.com/ygelfand/go-esphome-device/mdns"
 
+	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/metrics"
 	"github.com/ygelfand/echolocal/internal/layout"
 )
@@ -41,7 +42,7 @@ func (a *API) advertise(ctx context.Context, port int) {
 			MACAddress:   a.srv.Info.MACAddress,
 			Version:      a.srv.Info.Version,
 			Platform:     layout.Platform,
-			Board:        layout.Board,
+			Board:        config.Get().Device.Board.Codename,
 			Encrypted:    a.srv.PSK != nil,
 			IPs:          ips,
 		})

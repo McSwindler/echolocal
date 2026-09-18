@@ -11,7 +11,6 @@ import (
 	"github.com/ygelfand/echolocal/internal/host/assets"
 	"github.com/ygelfand/echolocal/internal/host/sepolicy"
 	"github.com/ygelfand/echolocal/internal/host/sysimg"
-	"github.com/ygelfand/echolocal/internal/layout"
 )
 
 // rcEdit rewrites one rc file and names what it changed.
@@ -216,12 +215,13 @@ func patchSystem(r *run) (string, bool, error) {
 
 	// init reads a service block once, at boot. The install has to start echod in the run that writes
 	// it, so this one edit cannot wait for the reboot the rest of the rc changes do.
+	name := r.board().ServiceName
 	if _, err := r.patchInitRC(at,
-		func(s string) (string, []string) { return services.AsRoot(s, layout.ServiceName) },
+		func(s string) (string, []string) { return services.AsRoot(s, name) },
 	); err != nil {
 		return "", false, err
 	}
-	written = append(written, layout.ServiceName)
+	written = append(written, name)
 
 	permissive, err := r.permissiveAtBoot(at)
 	if err != nil {

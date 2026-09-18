@@ -1,5 +1,7 @@
 package config
 
+import "github.com/ygelfand/echolocal/internal/defaults"
+
 // Diag is how the device reports on itself.
 type Diag struct {
 	// Interval is how often the readings that drift are collected, in seconds.
@@ -19,10 +21,10 @@ type Diag struct {
 // nobody.
 const DefaultInterval = 300
 
-const DefaultMinCores = 2
-
-func defaultDiag() Diag {
-	return Diag{Interval: DefaultInterval, MinCores: DefaultMinCores}
+// How many cores are worth holding online is a question about the cores a board has, so it comes
+// from defaults.
+func defaultDiag(d defaults.Set) Diag {
+	return Diag{Interval: DefaultInterval, MinCores: d.MinCores}
 }
 
 type DiagWriter struct{ st *Store }

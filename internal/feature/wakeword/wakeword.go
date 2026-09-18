@@ -16,6 +16,7 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
@@ -261,11 +262,19 @@ func deliveries() []config.Delivery {
 
 func (w *WakeWord) Name() string { return "wake word settings" }
 
+// Three of a slot's settings say what the ring does at each point in a turn, and are offered only on
+// a board that has one. Everything else about a wake word — what it listens for, how surely, what it
+// sounds like, how long it waits — is the same wherever it runs.
 func (w *WakeWord) Entities() []esphome.Entity {
+	ring := component.Board().Has(board.Ring)
+
 	var ents []esphome.Entity
 	for _, s := range w.slots {
-		ents = append(ents, s.wake, s.threshold, s.tone, s.effect, s.thinking, s.replying,
-			s.delivery, s.buffer, s.followUp, s.maxListen, s.maxThink)
+		ents = append(ents, s.wake, s.threshold, s.tone)
+		if ring {
+			ents = append(ents, s.effect, s.thinking, s.replying)
+		}
+		ents = append(ents, s.delivery, s.buffer, s.followUp, s.maxListen, s.maxThink)
 	}
 	return ents
 }

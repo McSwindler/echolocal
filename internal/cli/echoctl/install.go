@@ -68,16 +68,24 @@ func newInstallCmd() *cobra.Command {
 				return err
 			}
 
-			cfg := installer.Config{ZeroPSK: zeroPSK}
+			// Which device this is decides everything that follows: the boot image, where its verity
+			// metadata sits, and which of Amazon's services to turn off. A device this build has no
+			// profile for is refused here rather than part way through writing to it.
+			p, err := profileFor(d)
+			if err != nil {
+				return err
+			}
+
+			cfg := installer.Config{ZeroPSK: zeroPSK, Boot: p.Boot}
 
 			// The image is only resolved when it is going to be written. A device that already has root
-			// needs none, so a build that ships no payload can still install to one.
+			// needs none, so an install onto one never touches the network.
 			state, err := installer.Probe(d)
 			if err != nil {
 				return err
 			}
 			if !state.Ready {
-				if cfg.BootImage, cfg.BootImageFrom, err = payload(assets.BootImage(), bootImage, "boot image"); err != nil {
+				if cfg.BootImage, cfg.BootImageFrom, err = resolveBootImage(cmd.Context(), out, p, bootImage); err != nil {
 					return err
 				}
 				if cfg.Approved, err = approveFlash(cmd.Context(), out, d, state, cfg.BootImageFrom, assumeYes); err != nil {

@@ -16,6 +16,7 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
@@ -63,7 +64,14 @@ func Get() *Feedback {
 
 func (f *Feedback) Name() string { return "feedback" }
 
-func (f *Feedback) Entities() []esphome.Entity { return []esphome.Entity{f.failure} }
+// Which animation a failure shows is a question only where there is a ring. The chime that goes
+// with it is the speaker's and sounds on every board, so a failure is still reported either way.
+func (f *Feedback) Entities() []esphome.Entity {
+	if !component.Board().Has(board.Ring) {
+		return nil
+	}
+	return []esphome.Entity{f.failure}
+}
 
 func (f *Feedback) Restore(c config.Config) {
 	component.RestoreEffect(f.failure, c.Ring.Trouble, nil, config.Set().Ring().Trouble)

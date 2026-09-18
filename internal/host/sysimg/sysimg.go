@@ -67,11 +67,7 @@ var (
 // Adbd is the four bytes that stop the stock adbd dropping privileges: movs r0, #1; bx lr, which turns
 // the check into one that always passes. Patching rather than replacing the binary means a build this
 // was not derived from is refused instead of overwritten.
-var Adbd = struct {
-	Path          string
-	Offset        int64
-	Before, After []byte
-}{
+var Adbd = BinPatch{
 	Path:   "sbin/adbd",
 	Offset: 105460,
 	Before: []byte{0x10, 0xb5, 0x02, 0x20},

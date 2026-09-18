@@ -1,5 +1,7 @@
 package config
 
+import "github.com/ygelfand/echolocal/internal/defaults"
+
 // Microphone is the array: whether it is cut, how it is combined, and how hard it is driven.
 type Microphone struct {
 	Muted     bool `json:"muted"`
@@ -32,9 +34,6 @@ const (
 	DefaultMuted     = false
 	DefaultLEDBright = true
 
-	// Analog gain on the array in dB, where the vendor ran it.
-	DefaultMicGain = 20
-
 	DefaultMixing = MixCenter
 
 	// Home Assistant no longer levels what a satellite sends, so the device does.
@@ -42,22 +41,18 @@ const (
 
 	DefaultCancel = true
 
-	// Measured on a quiet room: 0.8 dB at the 99th percentile of frames, so this is well clear of the
-	// room itself and is really about brief small sounds — a chair, a keyboard.
-	DefaultSensitivity = 8
-
 	DefaultDenoise = false
 )
 
-func defaultMicrophone() Microphone {
+func defaultMicrophone(d defaults.Set) Microphone {
 	return Microphone{
 		Muted:       DefaultMuted,
 		LEDBright:   DefaultLEDBright,
-		Gain:        DefaultMicGain,
+		Gain:        d.MicGain,
 		Leveling:    DefaultLeveling,
 		Mixing:      DefaultMixing,
 		Cancel:      DefaultCancel,
-		Sensitivity: DefaultSensitivity,
+		Sensitivity: d.Sensitivity,
 		Denoise:     DefaultDenoise,
 	}
 }

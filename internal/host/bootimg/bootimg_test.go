@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -130,27 +131,45 @@ func TestCmdline(t *testing.T) {
 
 // The partition is written with dd in fixed blocks, and the count comes from the image size, so a size
 // that is not a whole number of blocks would read back short and fail a write that was fine.
-func TestOursFitsHowItIsWritten(t *testing.T) {
-	if Ours.Size%512 != 0 {
-		t.Errorf("image size %d is not a multiple of 512", Ours.Size)
+func TestBiscuitFitsHowItIsWritten(t *testing.T) {
+	if Biscuit.Size%512 != 0 {
+		t.Errorf("image size %d is not a multiple of 512", Biscuit.Size)
 	}
 	for _, size := range PartitionSizes {
-		if Ours.Size >= size {
-			t.Errorf("image is %d bytes and the partition is %d", Ours.Size, size)
+		if Biscuit.Size >= size {
+			t.Errorf("image is %d bytes and the partition is %d", Biscuit.Size, size)
 		}
 	}
 }
 
-// The shipped image is committed, so this always runs: it is what keeps the table and the file from
-// drifting apart, and a missing image means a build that cannot produce a release.
-func TestShippedImageIsWhatWeSayItIs(t *testing.T) {
-	const path = "../assets/boot.img"
+// The file in the tree is what gets uploaded, so an image that is not there is a board that cannot be
+// published — and a compiled-in URL that serves nothing, which is an install that fails at the fetch.
+//
+// Verifying rather than only checking it exists is what keeps the table and the file together.
+func TestEveryImageIsInTheTreeAndIsWhatWeSayItIs(t *testing.T) {
+	for _, img := range Images {
+		if img.File == "" {
+			t.Errorf("%s names no file to publish", img.Device)
+			continue
+		}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading the shipped image: %v", err)
-	}
-	if err := Ours.Verify(path, data); err != nil {
-		t.Error(err)
+		path := filepath.Join("../assets", img.File)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("reading %s: %v", img.Device, err)
+			continue
+		}
+		if err := img.Verify(path, data); err != nil {
+			t.Error(err)
+		}
+
+		// The upload sends the directory as it stands, so a file whose name differs from the last
+		// segment of its URL is a URL that serves nothing.
+		if base := filepath.Base(img.File); base != img.Asset() {
+			t.Errorf("%s is committed as %q and published at %q", img.Device, base, img.Asset())
+		}
+		if !strings.Contains(img.URL, "/"+Tag+"/") {
+			t.Errorf("%s is published at %q, which is not under the %s tag", img.Device, img.URL, Tag)
+		}
 	}
 }

@@ -59,11 +59,13 @@ func ReadName(d *device.Device) (string, error) {
 
 // SuggestName derives a unique default from the device's address.
 func SuggestName(d *device.Device) string {
+	on := BoardOf(d)
+
 	out, err := d.Shell("cat " + layout.MACPath)
 	if err != nil {
-		return layout.DefaultName
+		return on.DefaultName
 	}
-	return layout.NameFromMAC(out)
+	return on.NameFromMAC(out)
 }
 
 // validName checks the display name can produce a usable node name. The name is stored as typed

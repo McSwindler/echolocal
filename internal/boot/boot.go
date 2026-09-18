@@ -13,9 +13,11 @@ import (
 	"strings"
 
 	"github.com/ygelfand/echolocal/internal/android/prop"
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	_ "github.com/ygelfand/echolocal/internal/component/all"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/defaults"
 	"github.com/ygelfand/echolocal/internal/feature/voice"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/metrics"
@@ -29,18 +31,27 @@ import (
 // Hardware that cannot be taken is logged and left out: a device with no speaker still answers, and
 // nothing here is worth refusing to start over.
 func Run(ctx context.Context) error {
-	slog.Info("echod starting", "version", layout.Version,
+	// Which device this is, before anything that depends on the answer. The registry needs it to know
+	// what to build, the settings need it for the values a board decides, and both are read the moment
+	// a component is restored.
+	b := board.Detect()
+
+	slog.Info("echod starting", "version", layout.Version, "board", b,
 		"pid", os.Getpid(), "uid", os.Getuid(), "context", selinuxContext())
 
 	_ = prop.Set(layout.StartedProp, fmt.Sprintf("%.2f", metrics.Uptime()))
 	_ = prop.Set(layout.StateProp, "starting")
 
+	component.Default().Use(b)
+	defaults.Use(b)
+
 	// What this process was told, put where everything else reads its settings from, so nothing has to
 	// be handed a struct to find out what the device is called or where it listens. Before anything
 	// else: the components were built during init and read this the moment they are asked to restore.
 	config.Started(config.Device{
-		Name: name(),
-		Addr: listenAddr(),
+		Name:  name(b),
+		Addr:  listenAddr(),
+		Board: b,
 	})
 	if err := config.LoadError(); err != nil {
 		slog.Error("reading the saved config failed, continuing with defaults", "err", err)

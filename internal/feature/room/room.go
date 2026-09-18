@@ -12,6 +12,7 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/light"
@@ -21,7 +22,7 @@ import (
 
 // After the light, whose colour it inherits.
 func init() {
-	component.Register(component.Device, Get, component.Order(20))
+	component.Register(component.Device, Get, component.Order(20), component.Needs(board.Ring))
 }
 
 type Reaction struct {

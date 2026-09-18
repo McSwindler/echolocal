@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/host/device"
 	"github.com/ygelfand/echolocal/internal/layout"
 )
@@ -20,6 +21,12 @@ type State struct {
 	// Name is what Home Assistant calls the device, and Provisioned whether it has a key.
 	Name        string
 	Provisioned bool
+
+	// Board is what the device says it is, and Service the init service echod is installed as there.
+	// Reported so that whatever displays this does not have to work out the board a second time.
+	Board   board.Board
+	Service string
+	Backup  string
 
 	Installed  bool
 	LinkTarget string
@@ -50,12 +57,19 @@ func ReadState(d *device.Device) (State, error) {
 	s.SDK, _ = d.Getprop("ro.build.version.sdk")
 	s.Uptime, _ = d.Uptime()
 
-	link, err := d.IsSymlink(layout.Service)
+	// The device already said what it is, so the board comes from that rather than another getprop.
+	s.Board = board.Biscuit
+	if b, ok := board.For(s.Product); ok {
+		s.Board = b
+	}
+	s.Service, s.Backup = s.Board.Service, s.Board.Backup()
+
+	link, err := d.IsSymlink(s.Service)
 	if err != nil {
 		return s, err
 	}
 	if link {
-		target, err := d.Shell("readlink " + layout.Service)
+		target, err := d.Shell("readlink " + s.Service)
 		if err != nil {
 			return s, err
 		}
@@ -63,7 +77,7 @@ func ReadState(d *device.Device) (State, error) {
 		s.Installed = s.LinkTarget == layout.Binary
 	}
 
-	if s.HaveBackup, err = d.Exists(layout.Backup); err != nil {
+	if s.HaveBackup, err = d.Exists(s.Backup); err != nil {
 		return s, err
 	}
 
@@ -85,7 +99,7 @@ func ReadState(d *device.Device) (State, error) {
 	}
 	s.Provisioned = key != ""
 
-	s.ServiceState, _ = d.Getprop("init.svc." + layout.ServiceName)
+	s.ServiceState, _ = d.Getprop("init.svc." + s.Board.ServiceName)
 	s.AgentState, _ = d.Getprop(layout.StateProp)
 	s.StartedAt, _ = d.Getprop(layout.StartedProp)
 	return s, nil

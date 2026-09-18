@@ -54,14 +54,14 @@ func newStatusCmd() *cobra.Command {
 				row("version", s.Version)
 			} else if s.LinkTarget != "" {
 				row("installed", styleFail.Render("no")+" "+
-					styleDetail.Render(layout.Service+" -> "+s.LinkTarget))
+					styleDetail.Render(s.Service+" -> "+s.LinkTarget))
 			} else {
 				row("installed", styleFail.Render("no")+" "+
-					styleDetail.Render(layout.Service+" is Amazon's binary"))
+					styleDetail.Render(s.Service+" is Amazon's binary"))
 			}
 
 			if s.HaveBackup {
-				row("backup", styleDone.Render("present")+" "+styleDetail.Render(layout.Backup))
+				row("backup", styleDone.Render("present")+" "+styleDetail.Render(s.Backup))
 			} else {
 				row("backup", styleSkip.Render("none"))
 			}

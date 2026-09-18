@@ -67,9 +67,10 @@ func awaitResident(r *run) (string, bool, error) {
 			return "resident, started at uptime " + started, false, nil
 		}
 		if time.Now().After(deadline) {
-			svc, _ := r.d.Getprop("init.svc." + layout.ServiceName)
+			name := r.board().ServiceName
+			svc, _ := r.d.Getprop("init.svc." + name)
 			return "", false, fmt.Errorf("echod is %q %s after boot (init.svc.%s=%q)",
-				state, residentTimeout, layout.ServiceName, svc)
+				state, residentTimeout, name, svc)
 		}
 
 		select {

@@ -446,7 +446,14 @@ func (p *Player) Adjust(delta int) {
 // show lights the level as a clockwise arc, the leading segment dimmed by the fraction of a segment
 // the level does not fill. It takes its own claim each time and lets it expire, which is what puts
 // back whatever was underneath — including a conversation that is still running.
+// A board with no ring has no arc to light. The chime that goes with a volume change is the
+// speaker's and happens either way.
 func (p *Player) show(step int) {
+	leds := led.Get()
+	if !leds.Present() {
+		return
+	}
+
 	frame := led.Volume(float64(step) / VolumeSteps)
-	led.Get().Claim(led.PriorityNotice).PaintFor(frame, volumeFlash)
+	leds.Claim(led.PriorityNotice).PaintFor(frame, volumeFlash)
 }

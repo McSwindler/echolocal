@@ -8,6 +8,7 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/service"
 )
@@ -21,6 +22,10 @@ import (
 type Registry struct {
 	mu      sync.Mutex
 	entries []*entry
+
+	// board is what the components are being built for. Biscuit until something says otherwise:
+	// every device in the field is one, and a registry nobody told is a test or an offline tool.
+	board board.Board
 }
 
 type entry struct {
@@ -30,6 +35,9 @@ type entry struct {
 	phase Phase
 	order int
 	opts  []service.Option
+
+	// needs is the hardware this component has nothing to do without.
+	needs board.Cap
 }
 
 // resolve builds the component, once. Every walk goes through sorted, which resolves before anything
@@ -47,9 +55,37 @@ func Supervise(opts ...service.Option) Option {
 	return func(e *entry) { e.opts = append(e.opts, opts...) }
 }
 
+// Needs says the component has nothing to do on a board without this hardware. It is left out
+// entirely there: never built, so it never opens a device, and with no entity, action or lifecycle
+// of its own. Home Assistant is shown a device that does not have the thing, rather than one whose
+// controls do nothing.
+func Needs(c board.Cap) Option { return func(e *entry) { e.needs |= c } }
+
 // New is an empty registry. There is a process-wide one for components to register into; this is
 // for tests, which want their own.
-func New() *Registry { return &Registry{} }
+func New() *Registry { return &Registry{board: board.Biscuit} }
+
+// Use says which board the components are being built for. It has to be called before anything
+// walks the registry, since the first walk is what builds them.
+func (r *Registry) Use(b board.Board) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.board = b
+}
+
+// Board is which device the components are being built for.
+func (r *Registry) Board() board.Board {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.board
+}
+
+// Board is the process-wide answer to which device this is.
+//
+// Components ask here rather than detecting for themselves, so there is one answer and not several
+// that happen to agree: Needs is resolved against this, and a component deciding for itself whether
+// to offer a setting has to reach the same conclusion the registry did.
+func Board() board.Board { return shared.Board() }
 
 var shared = New()
 
@@ -181,9 +217,15 @@ func (o oneshot) Close() error {
 // sorted is the entries in the order everything walks them.
 func (r *Registry) sorted() []*entry {
 	r.mu.Lock()
-	out := slices.Clone(r.entries)
+	on := r.board
+	out := slices.DeleteFunc(slices.Clone(r.entries), func(e *entry) bool {
+		return e.needs&^on.Caps != 0
+	})
 	r.mu.Unlock()
 
+	// Filtering happens above, before this: the constructor is what opens the hardware, so a component
+	// this board does not have must never reach it.
+	//
 	// Outside the lock: a constructor is the component's own code and has no business being run with
 	// the registry held.
 	for _, e := range out {

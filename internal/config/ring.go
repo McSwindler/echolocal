@@ -1,5 +1,7 @@
 package config
 
+import "github.com/ygelfand/echolocal/internal/defaults"
+
 // Ring is the light, apart from what Home Assistant holds for the light entity itself. Reaction,
 // Trouble and Muted are animations by name, or empty for none, and none of them are appearances the
 // light was set to: they outlive it being switched off and come back with it.
@@ -34,23 +36,17 @@ const (
 	// a choice, not a default: in a bedroom it is the opposite of what you want.
 	DefaultReaction = ""
 
-	// A failure says so, because a request that silently did nothing is the worst of the options.
-	DefaultTrouble = "Alert"
-
-	// A cut microphone does not, because the button has its own LED for exactly this and a ring held
-	// lit for as long as someone leaves the device muted is both a light nobody asked for and, on this
-	// hardware, an audible one.
-	DefaultRingMuted = ""
-
 	// Full, for whatever turns the ring on without saying how bright.
 	DefaultBrightness = 1.0
 )
 
-func defaultRing() Ring {
+// What the ring shows when a turn fails and while the microphones are cut are both statements about
+// the ring on a particular device, so they come from defaults rather than being fixed here.
+func defaultRing(d defaults.Set) Ring {
 	return Ring{
 		Reaction: DefaultReaction,
-		Trouble:  DefaultTrouble,
-		Muted:    DefaultRingMuted,
+		Trouble:  d.RingTrouble,
+		Muted:    d.RingMuted,
 		Light:    Light{Brightness: DefaultBrightness, Red: 1, Green: 1, Blue: 1},
 	}
 }

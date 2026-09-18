@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ygelfand/echolocal/internal/board"
+	"github.com/ygelfand/echolocal/internal/host/bootimg"
 	"github.com/ygelfand/echolocal/internal/host/device"
+	"github.com/ygelfand/echolocal/internal/host/profile"
 	"github.com/ygelfand/echolocal/internal/layout"
 )
 
@@ -48,9 +51,13 @@ type Config struct {
 	// network can drive the device.
 	ZeroPSK bool
 
-	// BootImage is the image the flash stage writes, and BootImageFrom where it came from.
+	// BootImage is the image the flash stage writes, and BootImageFrom where it came from. Boot is
+	// what it has to be — the hash, the size and the cmdline this build was compiled with — which is
+	// checked against the bytes before the device is touched, whether they were fetched, cached or
+	// handed over on the command line.
 	BootImage     []byte
 	BootImageFrom string
+	Boot          bootimg.Image
 
 	// Approved records that someone agreed to the boot partition being overwritten. Nothing is
 	// written without it: the caller asks, because by the time a stage runs the terminal belongs to
@@ -97,6 +104,10 @@ type run struct {
 	// state is what the device last said about itself. The flash stage reads it before deciding to
 	// write anything and again afterwards to judge whether it worked.
 	state state
+
+	// on is the board, read through board() rather than directly: not every run starts with a step
+	// that has already asked the device what it is.
+	on board.Board
 
 	// reboot is or-ed by the steps that change something init only acts on at start-up. The rest of a
 	// run — checks, remounts, writing the binary, restarting the service — happens every time and
@@ -165,12 +176,19 @@ func checkDevice(r *run) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
+	// A device this build has no profile for is refused here, before anything is written to it.
+	model, _ := r.d.Getprop("ro.product.device")
+	if _, err := profile.For(model); err != nil {
+		return "", false, err
+	}
+
 	// Fire OS 6 is Android 7.1, SDK 25. Fire OS 5 devices are SDK 22 and are not installed to any more:
 	// the image, the partition layout and the binary all differ, and an older release still does it.
+	//
+	// TODO: once other devices exist, work out their SDK requirements.
 	if sdk != "25" {
 		return "", false, fmt.Errorf("device reports SDK %s, want 25 (Fire OS 6); Fire OS 5 needs echoctl 0.0.6 or earlier", sdk)
 	}
-	model, _ := r.d.Getprop("ro.product.device")
 	return fmt.Sprintf("%s, SDK %s, %s", model, sdk, r.d.Serial()), false, nil
 }
 
@@ -230,17 +248,19 @@ func clearTrial(r *run) error {
 // backupService keeps Amazon's binary. Moving it a second time would move our own symlink
 // onto the backup and lose the original for good, so this only ever runs once.
 func backupService(r *run) (string, bool, error) {
-	have, err := r.d.Exists(layout.Backup)
+	on := r.board()
+
+	have, err := r.d.Exists(on.Backup())
 	if err != nil {
 		return "", false, err
 	}
 	if have {
-		return "already saved at " + layout.Backup, true, nil
+		return "already saved at " + on.Backup(), true, nil
 	}
-	if _, err := r.d.Shell(fmt.Sprintf("mv %s %s", layout.Service, layout.Backup)); err != nil {
+	if _, err := r.d.Shell(fmt.Sprintf("mv %s %s", on.Service, on.Backup())); err != nil {
 		return "", false, err
 	}
-	return layout.Backup, false, nil
+	return on.Backup(), false, nil
 }
 
 // takeOverService points init's ledcontroller at echod. Already pointing there is left alone rather
@@ -248,16 +268,18 @@ func backupService(r *run) (string, bool, error) {
 // changed something, and this is the step whose effect a reboot actually settles — init starts what the
 // link points at.
 func takeOverService(r *run) (string, bool, error) {
-	if current, err := r.d.Shell("readlink " + layout.Service); err == nil {
+	service := r.board().Service
+
+	if current, err := r.d.Shell("readlink " + service); err == nil {
 		if strings.TrimSpace(current) == layout.Binary {
 			return "already " + layout.Binary, true, nil
 		}
 	}
 
-	if _, err := r.d.Shell(fmt.Sprintf("rm -f %s && ln -s %s %s", layout.Service, layout.Binary, layout.Service)); err != nil {
+	if _, err := r.d.Shell(fmt.Sprintf("rm -f %s && ln -s %s %s", service, layout.Binary, service)); err != nil {
 		return "", false, err
 	}
-	target, err := r.d.Shell("readlink " + layout.Service)
+	target, err := r.d.Shell("readlink " + service)
 	if err != nil {
 		return "", false, err
 	}
@@ -272,7 +294,9 @@ func takeOverService(r *run) (string, bool, error) {
 // init publishes a transient "stopping" before the process is reaped, so only "stopped" means
 // the mapping is gone.
 func stopService(r *run) (string, bool, error) {
-	if err := r.d.Setprop("ctl.stop", layout.ServiceName); err != nil {
+	name := r.board().ServiceName
+
+	if err := r.d.Setprop("ctl.stop", name); err != nil {
 		return "", false, err
 	}
 
@@ -280,7 +304,7 @@ func stopService(r *run) (string, bool, error) {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		var err error
-		if state, err = r.d.Getprop("init.svc." + layout.ServiceName); err != nil {
+		if state, err = r.d.Getprop("init.svc." + name); err != nil {
 			return "", false, err
 		}
 		if state == "stopped" {
@@ -295,9 +319,10 @@ func stopService(r *run) (string, bool, error) {
 // ctl.start returns before the process has run. echod publishes its start as an uptime, which
 // only moves forward within a boot, so a changed value means this run rather than the last.
 func startService(r *run) (string, bool, error) {
+	name := r.board().ServiceName
 	before, _ := r.d.Getprop(layout.StartedProp)
 
-	if err := r.d.Setprop("ctl.start", layout.ServiceName); err != nil {
+	if err := r.d.Setprop("ctl.start", name); err != nil {
 		return "", false, err
 	}
 
@@ -313,6 +338,6 @@ func startService(r *run) (string, bool, error) {
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	state, _ := r.d.Getprop("init.svc." + layout.ServiceName)
-	return "", false, fmt.Errorf("echod did not report a start within 10s (init.svc.%s=%s)", layout.ServiceName, state)
+	state, _ := r.d.Getprop("init.svc." + name)
+	return "", false, fmt.Errorf("echod did not report a start within 10s (init.svc.%s=%s)", name, state)
 }

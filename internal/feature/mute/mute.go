@@ -14,6 +14,7 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/buttons"
@@ -112,8 +113,15 @@ func build() *Mute {
 
 func (m *Mute) Name() string { return "microphone mute" }
 
+// The mute switch and the button's own LED are on every board. What the ring shows while the
+// microphones are cut is only a question where there is a ring, so that setting is offered only
+// there — an option that cannot do anything is worse than no option.
 func (m *Mute) Entities() []esphome.Entity {
-	return []esphome.Entity{m.sw, m.ring, m.brightness}
+	ents := []esphome.Entity{m.sw, m.brightness}
+	if component.Board().Has(board.Ring) {
+		ents = append(ents, m.ring)
+	}
+	return ents
 }
 
 // Muted reports whether the line is cut, which is what a turn has to check before opening the

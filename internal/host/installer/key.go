@@ -63,7 +63,7 @@ func RotateKey(d *device.Device) (string, error) {
 	if err := writeKey(d, k.String()); err != nil {
 		return "", err
 	}
-	if err := d.Setprop("ctl.restart", layout.ServiceName); err != nil {
+	if err := d.Setprop("ctl.restart", BoardOf(d).ServiceName); err != nil {
 		return "", err
 	}
 	return k.String(), nil

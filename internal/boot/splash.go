@@ -12,7 +12,13 @@ import (
 // Not a service: it finishes, and nothing waits on it or restarts it. It holds the boot claim, which
 // outranks everything, so nothing has to be withheld while it runs — the light entity and the saved
 // volume can arrive whenever they like and sit underneath until the claim goes away.
+// A board with no ring has nowhere to run it. The claim would be held and never rendered, which is
+// harmless and still a goroutine waiting on a boot that has nothing to show.
 func startSplash(ctx context.Context, leds *led.Driver, ready func() bool) {
+	if !leds.Present() {
+		return
+	}
+
 	safe.Go("splash", func() {
 		claim := leds.Claim(led.PriorityBoot)
 		defer claim.Release()

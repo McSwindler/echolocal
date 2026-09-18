@@ -55,18 +55,50 @@ type Image struct {
 
 	// Device is the ro.product.device it belongs to.
 	Device string
+
+	// File is the image in the repo, relative to internal/host/assets, named exactly as it is
+	// published. `make boot-images` uploads the directory, so the name in the tree is the name the
+	// URL serves and there is nothing to keep in step.
+	File string
+
+	// URL is where that upload lands.
+	//
+	// Deliberately not a "latest" link, which is what the device's own update channel wants. The hash
+	// above is compiled into this build and has to keep matching what this URL serves for as long as
+	// anyone runs it, so images live under one tag of their own and are uploaded once.
+	URL string
 }
 
-// Ours describes images/echolocal-boot.img.
+// Tag is the release holding every board's boot image. It is never rebuilt: a release attaches its
+// assets to the tag it is building, and these have to outlive any particular version of echoctl.
+const Tag = "boot-images"
+
+// Biscuit is the boot image for a 2nd-generation Echo Dot.
 //
 // Its ramdisk keeps MTK section headers, so anything unpacking it has to skip the 512-byte ROOTFS
 // header before the gzip.
-var Ours = Image{
+var Biscuit = Image{
 	SHA256:  "7f12e1522211d2e1adfc0164a5c2381b8819f44099732bf919b12c23e41e7dd1",
 	Size:    9678848,
 	Cmdline: "androidboot.selinux=permissive",
 	Build:   13121734532,
 	Device:  "biscuit_puffin",
+
+	File: "boot/echolocal-boot-biscuit.img",
+	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-biscuit.img",
+}
+
+// Images is every boot image this build knows, which is what `make boot-images` publishes and what
+// the tests check against the files in the tree.
+var Images = []Image{Biscuit}
+
+// Asset is the name this image is published under, which is the last segment of its URL.
+func (i Image) Asset() string {
+	at := strings.LastIndex(i.URL, "/")
+	if at < 0 {
+		return ""
+	}
+	return i.URL[at+1:]
 }
 
 // magic is what every Android boot image starts with.

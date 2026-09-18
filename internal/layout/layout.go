@@ -5,7 +5,6 @@ package layout
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -30,14 +29,9 @@ const (
 	UpdatingPath = StateDir + "/updating"
 )
 
-// echod runs as Amazon's ledcontroller service: taking over the definition removes the only
-// other writer of the LED ring and gets us init's supervision.
-const (
-	Service      = "/system/bin/ledcontroller"
-	BackupSuffix = ".orig"
-	Backup       = Service + BackupSuffix
-	ServiceName  = "ledcontroller"
-)
+// BackupSuffix marks a stock file we moved aside, whether that is the service echod was installed
+// as or one of the boot animation wrappers. Which service that is belongs to the board.
+const BackupSuffix = ".orig"
 
 // The boot animation wrappers init runs; both call ledctrl, which waits on a binder service echod does
 // not publish. StartAnimation runs on the way up and StopAnimation once Android reports the boot
@@ -49,12 +43,10 @@ const (
 
 var AnimationScripts = []string{StartAnimation, StopAnimation}
 
-// SELinux labels. A service's domain comes from the label of the file init execs, and
-// system_file has no transition rule, which leaves echod in init's own domain.
-const (
-	OurLabel   = "u:object_r:system_file:s0"
-	StockLabel = "u:object_r:ledd_exec:s0"
-)
+// OurLabel is the SELinux label echod's own files carry. A service's domain comes from the label of
+// the file init execs, and system_file has no transition rule, which leaves echod in init's own
+// domain. The label the stock binary wore is the board's, since it names that board's service.
+const OurLabel = "u:object_r:system_file:s0"
 
 // Properties echod publishes about itself. Started is an uptime, which only moves forward
 // within a boot, so a changed value means a new process.
@@ -87,15 +79,11 @@ const FirewallHook = "/system/bin/greengrass_firewall.sh"
 // MaxNodeName is the length limit the ESPHome API imposes on a node name.
 const MaxNodeName = 31
 
-// Hardware identity, as Home Assistant shows it in the device panel.
+// Hardware identity, as Home Assistant shows it in the device panel. What varies between models —
+// the model name, the board and the fallback display name — belongs to the board.
 const (
 	Manufacturer = "EchoLocal"
-	Model        = "Echo Dot 2 (biscuit)"
-	Board        = "biscuit"
 	Platform     = "echolocal"
-
-	// DefaultName is the fallback display name when a device has none recorded.
-	DefaultName = "Echo Dot"
 )
 
 // MACPath is the address the factory recorded, which the Wi-Fi driver takes when it comes up. idme
@@ -150,21 +138,6 @@ func FactoryMAC() (string, error) {
 	return mac, nil
 }
 
-// NameFromMAC builds the fallback display name, unique per device.
-func NameFromMAC(mac string) string {
-	var hex strings.Builder
-	for _, r := range strings.ToUpper(strings.TrimSpace(mac)) {
-		if r >= '0' && r <= '9' || r >= 'A' && r <= 'F' {
-			hex.WriteRune(r)
-		}
-	}
-	s := hex.String()
-	if len(s) < 6 {
-		return DefaultName
-	}
-	return DefaultName + " " + s[len(s)-6:]
-}
-
 // Idme reads a factory identity field from /proc/idme, empty on any error. These are written at
 // manufacture and never change, so a caller reads once and holds it.
 func Idme(name string) string {
@@ -173,47 +146,6 @@ func Idme(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(raw))
-}
-
-// Color is the device's shell, worked out from two idme fields: productid2 is 0 on a black unit and a
-// nonzero code on a white one, and the serial runs G090LF… on black against G090L9… on white. They
-// confirm each other; a disagreement, or nothing to read, is left unknown rather than guessed.
-func Color(productID2, serial string) string {
-	const (
-		black   = "black"
-		white   = "white"
-		unknown = "unknown"
-	)
-
-	prod := unknown
-	if n, err := strconv.Atoi(strings.TrimSpace(productID2)); err == nil {
-		if n == 0 {
-			prod = black
-		} else {
-			prod = white
-		}
-	}
-
-	ser := unknown
-	if s := strings.TrimSpace(serial); len(s) > 5 {
-		switch s[5] {
-		case 'F', 'f':
-			ser = black
-		case '9':
-			ser = white
-		}
-	}
-
-	switch {
-	case prod == unknown:
-		return ser
-	case ser == unknown:
-		return prod
-	case prod == ser:
-		return prod
-	default:
-		return unknown
-	}
 }
 
 // Slug turns a display name into a node name: an mDNS hostname, and the prefix Home Assistant

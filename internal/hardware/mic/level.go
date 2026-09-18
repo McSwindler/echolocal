@@ -225,8 +225,13 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 // scale. Measuring the cut-microphone band noise at 0 and 59 dB would replace the extrapolation.
 const (
 	quietestAtGain = 16.0
-	quietestGainDB = config.DefaultMicGain
-	quietestLimit  = 2.0
+
+	// The gain the measurement was taken at, which is a fact about that measurement and not a default
+	// to follow. A board that starts somewhere else does not move where this was measured; only
+	// measuring again would.
+	quietestGainDB = 20
+
+	quietestLimit = 2.0
 )
 
 // quietest is the lowest a floor may go at a given analog gain.

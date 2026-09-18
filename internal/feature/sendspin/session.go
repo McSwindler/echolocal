@@ -68,7 +68,7 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 		// The factory mac: survives a reinstall, a rename and a new address.
 		ClientID: mac,
 		DeviceInfo: protocol.DeviceInfo{
-			ProductName:     layout.Model,
+			ProductName:     config.Get().Device.Board.Model,
 			Manufacturer:    layout.Manufacturer,
 			SoftwareVersion: layout.Version,
 		},

@@ -120,14 +120,14 @@ check: fmt vet lint test ## Format, vet, lint and test
 ##@ Device (echod)
 
 .PHONY: payload
-payload: ## Stage echod and the boot image for embedding into echoctl
+payload: ## Stage echod for embedding into echoctl
 	@$(MAKE) --no-print-directory build-echod DOT_ARCH=arm
 	@mkdir -p $(ASSET_DIR)
 	cp $(BUILD_DIR)/echod-arm $(ASSET_DIR)/echod
 	@shasum -a 256 $(ASSET_DIR)/echod | awk '{print $$1}' > $(ASSET_DIR)/echod.sha256
 
 .PHONY: dist
-dist: payload ## Full build: echod, the boot image, then echoctl carrying both
+dist: payload ## Full build: echod, then echoctl carrying it
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build -tags payload -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/echoctl ./cmd/echoctl
 
@@ -198,6 +198,23 @@ manifest: build-echod-all ## Write the manifest a device fetches to find this bu
 		-release-url "$(PAGE)" \
 		-out $(BUILD_DIR)/manifest.json
 	@cat $(BUILD_DIR)/manifest.json
+
+# Boot images are published once per board, under one tag of their own, and never republished: the
+# hashes are compiled into echoctl, so what this tag serves has to keep matching every build that
+# has already shipped. That is why they are not goreleaser extra_files, which attach to whichever
+# tag is being released.
+BOOT_TAG := boot-images
+BOOT_DIR := internal/host/assets/boot
+
+.PHONY: boot-images
+boot-images: ## Publish the boot images echoctl fetches at install time (run once per board)
+	@command -v gh >/dev/null || { echo "needs the gh CLI: brew install gh"; exit 1; }
+	@go test ./internal/host/bootimg/ -run TestEveryImageIsInTheTreeAndIsWhatWeSayItIs
+	@gh release view $(BOOT_TAG) >/dev/null 2>&1 || \
+		gh release create $(BOOT_TAG) --title "Boot images" \
+			--notes "Per-board boot images, fetched by echoctl at install time against a hash compiled into it. Uploaded once per board and never replaced."
+	gh release upload $(BOOT_TAG) $(BOOT_DIR)/*.img --clobber
+	@echo "$(BOOT_TAG) now serves the boot images"
 
 .PHONY: release-dev
 release-dev: ## Publish this working tree to the dev channel, without pushing anything

@@ -64,6 +64,9 @@ type Diag struct {
 	ip    *esphome.TextSensor
 	color *esphome.TextSensor
 
+	// boardName reports the codename, not to be confused with board(), which samples the sensors on it.
+	boardName *esphome.TextSensor
+
 	signal *esphome.Sensor
 	rxRate *esphome.Sensor
 	txRate *esphome.Sensor
@@ -113,7 +116,7 @@ func (d *Diag) Entities() []esphome.Entity {
 		d.cached, d.free, d.purge,
 		d.temperature, d.radioTemp, d.cores, d.coresOnline, d.load, d.memory, d.lux,
 		d.roomLevel, d.roomFloor,
-		d.adb, d.tls, d.ip, d.color, d.signal, d.rxRate, d.txRate, d.ads,
+		d.adb, d.tls, d.ip, d.color, d.boardName, d.signal, d.rxRate, d.txRate, d.ads,
 		d.testPlayback, d.interval, d.minCores,
 	}
 }
@@ -299,9 +302,15 @@ func (d *Diag) address() {
 	d.ip.Set(strings.Join(ips, ", "))
 }
 
-// identity is what the device is rather than what it is doing. The shell colour comes off the factory
-// idme partition, which never changes, so it is read once here rather than sampled.
+// identity is what the device is rather than what it is doing. Neither of these changes within a
+// boot — the board is decided at start-up and the shell colour comes off the factory idme partition
+// — so both are read once here rather than sampled.
+//
+// The board is worth publishing because nothing else in the entity list says which model this is,
+// and what a device looks like is not something a dashboard can work out from its entities.
 func (d *Diag) identity() {
+	b := config.Get().Device.Board
+
 	d.color = &esphome.TextSensor{
 		Base: esphome.Base{
 			ObjectID: "hardware_color",
@@ -310,7 +319,17 @@ func (d *Diag) identity() {
 			Category: esphome.CategoryDiagnostic,
 		},
 	}
-	d.color.Set(layout.Color(layout.Idme("productid2"), layout.Idme("serial")))
+	d.color.Set(b.Color(layout.Idme))
+
+	d.boardName = &esphome.TextSensor{
+		Base: esphome.Base{
+			ObjectID: "hardware_board",
+			Name:     "Hardware board",
+			Icon:     "mdi:chip",
+			Category: esphome.CategoryDiagnostic,
+		},
+	}
+	d.boardName.Set(b.Codename)
 }
 
 // storage builds what the device says about its own disk. Cached is what could be deleted without

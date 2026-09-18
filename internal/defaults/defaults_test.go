@@ -1,0 +1,40 @@
+package defaults
+
+import (
+	"testing"
+
+	"github.com/ygelfand/echolocal/internal/board"
+)
+
+// The values moved here out of config were all measured on a biscuit, and moving them must not have
+// changed any of them: a device that has never been configured has to come up the way it did before.
+func TestBiscuitIsWhatItAlwaysWas(t *testing.T) {
+	got := For(board.Biscuit)
+
+	want := Set{
+		MicGain:     20,
+		Sensitivity: 8,
+		RingTrouble: "Alert",
+		RingMuted:   "",
+		MinCores:    2,
+	}
+	if got != want {
+		t.Errorf("biscuit's defaults are %+v, want %+v", got, want)
+	}
+}
+
+// A board nobody has measured borrows biscuit's numbers rather than coming up with none. Zero gain
+// on an array is a device that cannot hear.
+func TestAnUnmeasuredBoardBorrowsBiscuits(t *testing.T) {
+	if got := For(board.Crown); got != For(board.Biscuit) {
+		t.Errorf("crown starts from %+v, want biscuit's %+v", got, For(board.Biscuit))
+	}
+}
+
+// Nobody has to call Use for the values to be sane, because plenty of things that read a setting are
+// not the agent: the offline tools, and every test in the tree.
+func TestCurrentIsBiscuitUntilToldOtherwise(t *testing.T) {
+	if got := Current(); got != For(board.Biscuit) {
+		t.Errorf("Current() = %+v before Use, want biscuit's %+v", got, For(board.Biscuit))
+	}
+}

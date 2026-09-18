@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ygelfand/echolocal/internal/defaults"
 )
 
 func load(t *testing.T) *Store {
@@ -164,7 +166,7 @@ func TestAPartialFileKeepsTheDefaults(t *testing.T) {
 	if got.Speaker.Resampling != DefaultResampling {
 		t.Errorf("resampling = %q, want the default", got.Speaker.Resampling)
 	}
-	if got.Microphone.Gain != DefaultMicGain {
+	if got.Microphone.Gain != defaults.Current().MicGain {
 		t.Errorf("gain = %d, want the default", got.Microphone.Gain)
 	}
 	if !got.Microphone.Leveling {

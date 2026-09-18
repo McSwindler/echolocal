@@ -53,7 +53,8 @@ func offerRecovery(ctx context.Context, out io.Writer) error {
 	fmt.Fprintf(out, "\n%s\n", styleTitle.Render("Cannot reach the device"))
 	fmt.Fprintf(out, "%s\n", styleDetail.Render(
 		"  If the device is up and connected but the adb patches are not installed yet,\n"+
-			"  reboot it holding volume up, until the ring turns white."))
+			"  hold volume up while it powers on. On a device with a light, it is in\n"+
+			"  recovery once that light is solid white."))
 
 	ok, err := confirm(ctx, out, "Try again")
 	if err != nil {

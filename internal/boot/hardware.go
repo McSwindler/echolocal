@@ -5,21 +5,22 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/layout"
 )
 
 func listenAddr() string { return fmt.Sprintf(":%d", layout.Port) }
 
-func name() string {
-	if b, err := os.ReadFile(layout.NamePath); err == nil {
-		if recorded := strings.TrimSpace(string(b)); recorded != "" {
+func name(b board.Board) string {
+	if raw, err := os.ReadFile(layout.NamePath); err == nil {
+		if recorded := strings.TrimSpace(string(raw)); recorded != "" {
 			return recorded
 		}
 	}
 
 	mac, err := layout.FactoryMAC()
 	if err != nil {
-		return layout.DefaultName
+		return b.DefaultName
 	}
-	return layout.NameFromMAC(mac)
+	return b.NameFromMAC(mac)
 }
