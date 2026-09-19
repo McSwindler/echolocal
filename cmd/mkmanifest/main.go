@@ -12,9 +12,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/ygelfand/echolocal/internal/host/profile"
 	"github.com/ygelfand/echolocal/internal/update"
 )
 
@@ -31,15 +34,37 @@ func main() {
 	flag.StringVar(&m.Title, "title", "", "title for Home Assistant's update card")
 	flag.StringVar(&m.Notes, "notes", "", "release notes, shown on the card")
 	flag.StringVar(&m.ReleaseURL, "release-url", "", "what the card's link points at")
+
+	var perBoard boards
+	flag.Var(&perBoard, "board", "a build for one board only, as codename:arch:path; repeatable")
 	flag.Parse()
 
-	if err := run(m, *from, map[string]string{"arm64": *arm64, "arm": *arm}, *out); err != nil {
+	if err := run(m, *from, map[string]string{"arm64": *arm64, "arm": *arm}, perBoard, *out); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(m update.Manifest, from string, builds map[string]string, out string) error {
+// boards collects repeated -board flags.
+type boards []boardBuild
+
+func (b *boards) String() string { return fmt.Sprint([]boardBuild(*b)) }
+
+func (b *boards) Set(v string) error {
+	parts := strings.Split(v, ":")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return fmt.Errorf("want codename:arch:path, got %q", v)
+	}
+	*b = append(*b, boardBuild{Board: parts[0], Arch: parts[1], Path: parts[2]})
+	return nil
+}
+
+// boardBuild is one build meant for a single board rather than for every device of an architecture.
+type boardBuild struct {
+	Board, Arch, Path string
+}
+
+func run(m update.Manifest, from string, builds map[string]string, perBoard []boardBuild, out string) error {
 	if m.Version == "" || from == "" || builds["arm64"] == "" {
 		return fmt.Errorf("mkmanifest: -version, -from and -arm64 are all required")
 	}
@@ -57,8 +82,32 @@ func run(m update.Manifest, from string, builds map[string]string, out string) e
 		m.Binaries[arch] = b
 	}
 
+	// Every supported board, naming the shared build. A board missing from here is a board that stops
+	// seeing updates, so the list comes from what echoctl installs onto rather than being typed out.
+	m.Boards = make(map[string]map[string]update.Binary, len(profile.Boards()))
+	for _, b := range profile.Boards() {
+		m.Boards[b.Codename] = maps.Clone(m.Binaries)
+	}
+
+	for _, pb := range perBoard {
+		if _, ok := m.Boards[pb.Board]; !ok {
+			return fmt.Errorf("mkmanifest: -board names %q, which is not a board this build installs onto", pb.Board)
+		}
+		b, err := measure(pb.Path)
+		if err != nil {
+			return err
+		}
+		b.URL = from + "/" + filepath.Base(pb.Path)
+		m.Boards[pb.Board][pb.Arch] = b
+	}
+
 	arm64 := m.Binaries["arm64"]
 	m.URL, m.SHA256, m.Size = arm64.URL, arm64.SHA256, arm64.Size
+
+	// Devices in the field read these and nothing else.
+	if m.URL == "" || len(m.Binaries) == 0 {
+		return fmt.Errorf("mkmanifest: %s carries no shared binaries, which no device already in the field could install", m.Version)
+	}
 
 	// The same rules the device applies, so a release cannot publish a manifest every device will reject.
 	if err := m.Valid(); err != nil {

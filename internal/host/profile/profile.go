@@ -11,6 +11,7 @@ package profile
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ygelfand/echolocal/internal/board"
@@ -49,4 +50,14 @@ func For(device string) (Profile, error) {
 		return Profile{Board: b}, fmt.Errorf("profile: %s is known but not yet supported — nobody has had one to work out its boot image or partition layout", b)
 	}
 	return p, nil
+}
+
+// Boards is every board this build installs onto, which is the set a release publishes builds for.
+func Boards() []board.Board {
+	out := make([]board.Board, 0, len(profiles))
+	for _, p := range profiles {
+		out = append(out, p.Board)
+	}
+	slices.SortFunc(out, func(a, b board.Board) int { return strings.Compare(a.Codename, b.Codename) })
+	return out
 }

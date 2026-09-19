@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,15 +35,20 @@ func release(t *testing.T, bodies map[string][]byte) Manifest {
 		b.URL = srv.URL + "/echod-" + a
 		m.Binaries[a] = b
 	}
+	m.Boards = map[string]map[string]Binary{testBoard: maps.Clone(m.Binaries)}
 	return m
 }
+
+// testBoard is what these tests say they are running on. Which board it is does not matter; that
+// there is one does, since a build is only ever offered to a named board.
+const testBoard = "biscuit"
 
 // one is the single build of a release that carries nothing else, for the tests about fetching rather
 // than about choosing.
 func one(t *testing.T, body []byte) Binary {
 	t.Helper()
 
-	b, err := release(t, map[string][]byte{arch: body}).For(arch)
+	b, err := release(t, map[string][]byte{arch: body}).For(testBoard, arch)
 	if err != nil {
 		t.Fatal(err)
 	}

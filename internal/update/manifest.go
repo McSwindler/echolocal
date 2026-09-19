@@ -23,14 +23,16 @@ type Manifest struct {
 	// running.
 	Version string `json:"version"`
 
-	// URL, SHA256 and Size are the arm64 build. An echod that reads only these is arm64 by
-	// construction, and they are its only route onto a newer build.
-	URL    string `json:"url"`
-	SHA256 string `json:"sha256"`
-	Size   int64  `json:"size"`
-
-	// Binaries is keyed by the Go architecture each build targets.
+	// The arm64 build and the builds by architecture. Nothing here reads them; they are how devices
+	// already in the field resolve, so every release fills them.
+	URL      string            `json:"url"`
+	SHA256   string            `json:"sha256"`
+	Size     int64             `json:"size"`
 	Binaries map[string]Binary `json:"binaries"`
+
+	// Boards is keyed by codename then architecture. Every supported board is listed, naming the
+	// shared file unless it has a build of its own.
+	Boards map[string]map[string]Binary `json:"boards,omitempty"`
 
 	Title      string `json:"title,omitempty"`
 	Notes      string `json:"notes,omitempty"`
@@ -48,8 +50,15 @@ type Binary struct {
 
 const flatArch = "arm64"
 
-// arch is a variable so a test can stand somewhere other than the machine it runs on.
-var arch = runtime.GOARCH
+// What this device resolves a build by. Variables so a test can stand somewhere other than the
+// machine it runs on.
+var (
+	arch     = runtime.GOARCH
+	codename string
+)
+
+// Use says which board this device is. Called once at start-up.
+func Use(board string) { codename = board }
 
 // manifestTimeout bounds the fetch. Home Assistant asks for this on connect and after every selection
 // change, so it has to fail quickly rather than hold up a configuration reply.
@@ -114,6 +123,13 @@ func (m Manifest) Valid() error {
 			return err
 		}
 	}
+	for board, builds := range m.Boards {
+		for a, b := range builds {
+			if err := b.valid(m.Version, board+" "+a); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -129,14 +145,15 @@ func (b Binary) valid(version, arch string) error {
 	return nil
 }
 
-// For is the build a device of this architecture may install. A manifest carrying only the top-level
-// fields answers for arm64.
-func (m Manifest) For(arch string) (Binary, error) {
-	if b, ok := m.Binaries[arch]; ok {
+// For is the build this board and architecture may install. It does not fall back to the shared
+// fields: those are for devices that cannot read Boards, and taking one here could install a binary
+// built for another board.
+func (m Manifest) For(board, arch string) (Binary, error) {
+	if b, ok := m.Boards[board][arch]; ok {
 		return b, nil
 	}
-	if len(m.Binaries) == 0 && arch == flatArch {
-		return m.flat(), nil
+	if board == "" {
+		return Binary{}, fmt.Errorf("update: %s cannot be installed without knowing which board this is", m.Version)
 	}
-	return Binary{}, fmt.Errorf("update: %s carries no %s binary", m.Version, arch)
+	return Binary{}, fmt.Errorf("update: %s carries no %s build for %s", m.Version, arch, board)
 }

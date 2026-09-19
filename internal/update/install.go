@@ -41,7 +41,7 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if err := m.Valid(); err != nil {
 		return err
 	}
-	b, err := m.For(arch)
+	b, err := m.For(codename, arch)
 	if err != nil {
 		return err
 	}

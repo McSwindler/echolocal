@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ygelfand/echolocal/internal/host/profile"
 	"github.com/ygelfand/echolocal/internal/update"
 )
 
@@ -33,7 +34,7 @@ func write(t *testing.T) (deployed, update.Manifest) {
 	err := run(update.Manifest{Version: "0.0.7"}, "https://example/download/0.0.7", map[string]string{
 		"arm64": filepath.Join(dir, "echod-arm64"),
 		"arm":   filepath.Join(dir, "echod-arm"),
-	}, out)
+	}, nil, out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestEachArchitectureGetsItsOwnBuild(t *testing.T) {
 		"arm64": "https://example/download/0.0.7/echod-arm64",
 		"arm":   "https://example/download/0.0.7/echod-arm",
 	} {
-		b, err := now.For(arch)
+		b, err := now.For("biscuit", arch)
 		if err != nil {
 			t.Errorf("%s: %v", arch, err)
 			continue
@@ -91,5 +92,43 @@ func TestEachArchitectureGetsItsOwnBuild(t *testing.T) {
 
 	if now.Binaries["arm64"].SHA256 == now.Binaries["arm"].SHA256 {
 		t.Error("both architectures were measured as the same file")
+	}
+}
+
+// A board missing from the manifest is a board that stops seeing updates, so every board echoctl
+// installs onto has to be in there — without anyone remembering to add it.
+func TestEverySupportedBoardGetsABuild(t *testing.T) {
+	_, now := write(t)
+
+	for _, b := range profile.Boards() {
+		builds, ok := now.Boards[b.Codename]
+		if !ok {
+			t.Errorf("%s is installable but the manifest carries no build for it", b.Codename)
+			continue
+		}
+		for _, arch := range []string{"arm64", "arm"} {
+			if _, err := now.For(b.Codename, arch); err != nil {
+				t.Errorf("%s/%s: %v", b.Codename, arch, err)
+			}
+		}
+		if len(builds) != len(now.Binaries) {
+			t.Errorf("%s carries %d builds, want the %d the release made", b.Codename, len(builds), len(now.Binaries))
+		}
+	}
+}
+
+// With no build of its own a board names the shared file, so introducing one later is a change to
+// that board and to nothing else.
+func TestABoardWithNoBuildOfItsOwnNamesTheSharedFile(t *testing.T) {
+	_, now := write(t)
+
+	for arch, shared := range now.Binaries {
+		got, err := now.For("biscuit", arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != shared {
+			t.Errorf("%s: biscuit is offered %+v, want the shared %+v", arch, got, shared)
+		}
 	}
 }

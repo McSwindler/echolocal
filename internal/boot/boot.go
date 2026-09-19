@@ -44,6 +44,7 @@ func Run(ctx context.Context) error {
 
 	component.Default().Use(b)
 	defaults.Use(b)
+	update.Use(b.Codename)
 
 	// What this process was told, put where everything else reads its settings from, so nothing has to
 	// be handed a struct to find out what the device is called or where it listens. Before anything
