@@ -118,10 +118,11 @@ func Enable(rc string, names map[string]bool) (string, []string) {
 }
 
 // DisabledSet and EnabledSet are the lists as lookups.
-func DisabledSet() map[string]bool { return set(Disabled) }
-func EnabledSet() map[string]bool  { return set(Enabled) }
+func DisabledSet() map[string]bool { return Set(Disabled) }
+func EnabledSet() map[string]bool  { return Set(Enabled) }
 
-func set(names []string) map[string]bool {
+// Set is any list of service names as a lookup, for a board that carries its own.
+func Set(names []string) map[string]bool {
 	out := make(map[string]bool, len(names))
 	for _, name := range names {
 		out[name] = true

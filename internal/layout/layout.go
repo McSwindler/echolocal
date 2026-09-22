@@ -41,8 +41,6 @@ const (
 	StopAnimation  = "/system/bin/stop_animation.sh"
 )
 
-var AnimationScripts = []string{StartAnimation, StopAnimation}
-
 // OurLabel is the SELinux label echod's own files carry. A service's domain comes from the label of
 // the file init execs, and system_file has no transition rule, which leaves echod in init's own
 // domain. The label the stock binary wore is the board's, since it names that board's service.

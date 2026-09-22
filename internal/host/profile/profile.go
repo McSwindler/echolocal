@@ -5,8 +5,7 @@
 // here that has to stay small.
 //
 // A board echoctl has a name for but no profile is refused differently from a device nobody has
-// heard of: "not yet" and "not one of ours" are different things to be told, and the first one is a
-// pointer at what would have to be measured.
+// heard of.
 package profile
 
 import (
@@ -14,10 +13,19 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ygelfand/echolocal/internal/android/services"
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/host/bootimg"
 	"github.com/ygelfand/echolocal/internal/host/sysimg"
 )
+
+// profiles is the boards this build can install onto: those whose boot image, partition layout and
+// Amazon services have been worked out.
+var profiles = map[string]Profile{
+	board.Biscuit.Device:  biscuit,
+	board.Checkers.Device: checkers,
+	board.Cronos.Device:   cronos,
+}
 
 // Profile is one board's install.
 type Profile struct {
@@ -32,6 +40,9 @@ type Profile struct {
 
 	// Disable and Enable are the Amazon init services an install turns off and on.
 	Disable, Enable []string
+
+	// Hide are the Amazon packages an install hides, empty on a board with no package manager.
+	Hide []services.Package
 }
 
 // For is the profile for what a device says it is.
@@ -47,7 +58,11 @@ func For(device string) (Profile, error) {
 
 	p, ok := profiles[b.Device]
 	if !ok {
-		return Profile{Board: b}, fmt.Errorf("profile: %s is known but not yet supported — nobody has had one to work out its boot image or partition layout", b)
+		return Profile{Board: b}, fmt.Errorf("EchoLocal does not support %s yet", b)
+	}
+	// Without one, the install has nothing to become and would link echod over an empty path.
+	if b.ServiceName == "" {
+		return Profile{Board: b}, fmt.Errorf("EchoLocal does not support %s yet", b)
 	}
 	return p, nil
 }

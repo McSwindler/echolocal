@@ -47,14 +47,20 @@ func TestAnUndecodedBoardReportsUnknown(t *testing.T) {
 	}
 }
 
-// A board nobody has met must never match a device, or an install would be aimed at it on the
-// strength of a codename somebody typed.
+// A board with no Device recorded must never match, or an install would be aimed at it on the
+// strength of a typed codename.
 func TestOnlyBoardsReadOffHardwareCanMatch(t *testing.T) {
+	read := map[string]string{
+		"biscuit":  "biscuit_puffin",
+		"checkers": "checkers",
+		"cronos":   "cronos",
+	}
+
 	for _, b := range All {
 		if b.Device == "" {
 			continue
 		}
-		if b.Device != Biscuit.Device {
+		if want, ok := read[b.Codename]; !ok || b.Device != want {
 			t.Errorf("%s carries a ro.product.device of %q; has one actually been read off one?", b, b.Device)
 		}
 	}
@@ -81,14 +87,15 @@ func TestFor(t *testing.T) {
 	}
 }
 
-// Only biscuit has been run on. A board nobody has met must claim nothing: no service to take over,
-// and no capabilities, because both are things you find out by having one in your hands.
+// A board without hardware to check must claim nothing: no service to take over, no capabilities.
 func TestABoardNobodyHasMetClaimsNothing(t *testing.T) {
 	if Biscuit.ServiceName == "" {
 		t.Error("biscuit names no service for echod to be installed as")
 	}
+	met := map[string]bool{Biscuit.Device: true, Checkers.Device: true, Cronos.Device: true}
+
 	for _, b := range All {
-		if b.Device == Biscuit.Device {
+		if met[b.Device] {
 			continue
 		}
 		if b.Service != "" || b.ServiceName != "" || b.StockLabel != "" {

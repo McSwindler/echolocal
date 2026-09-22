@@ -26,8 +26,13 @@ import (
 
 // disableBootAnimation replaces both animation scripts, keeping the originals alongside.
 func disableBootAnimation(r *run) (string, bool, error) {
+	hooks := r.board().BootHooks
+	if len(hooks) == 0 {
+		return "no boot hooks on this board", true, nil
+	}
+
 	var done []string
-	for _, path := range layout.AnimationScripts {
+	for _, path := range hooks {
 		replaced, err := stubScript(r, path)
 		if err != nil {
 			return "", false, err

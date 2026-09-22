@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/board"
-	"github.com/ygelfand/echolocal/internal/host/bootimg"
 	"github.com/ygelfand/echolocal/internal/host/device"
 	"github.com/ygelfand/echolocal/internal/host/profile"
 	"github.com/ygelfand/echolocal/internal/layout"
@@ -51,13 +50,14 @@ type Config struct {
 	// network can drive the device.
 	ZeroPSK bool
 
-	// BootImage is the image the flash stage writes, and BootImageFrom where it came from. Boot is
-	// what it has to be — the hash, the size and the cmdline this build was compiled with — which is
-	// checked against the bytes before the device is touched, whether they were fetched, cached or
-	// handed over on the command line.
+	// BootImage is the image the flash stage writes, and BootImageFrom where it came from.
+	//
+	// Profile is the board's install: the image those bytes have to be, the system layout the flash
+	// writes, and the Amazon services to turn off. Every number in it was measured on one board's own
+	// image, so a run carrying the wrong profile writes another board's offsets.
 	BootImage     []byte
 	BootImageFrom string
-	Boot          bootimg.Image
+	Profile       profile.Profile
 
 	// Approved records that someone agreed to the boot partition being overwritten. Nothing is
 	// written without it: the caller asks, because by the time a stage runs the terminal belongs to
@@ -78,6 +78,7 @@ var steps = []step{
 	{"selinux permissive", checkPermissive},
 	{"remount /system rw", remountRW},
 	{"stop and disable Amazon services", deAmazon},
+	{"hide Amazon packages", hidePackages},
 	{"clear the saved usb config", clearUSBConfig},
 	{"install echod", installBinary},
 	{"back up stock ledcontroller", backupService},

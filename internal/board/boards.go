@@ -3,22 +3,28 @@ package board
 import (
 	"strconv"
 	"strings"
+
+	"github.com/ygelfand/echolocal/internal/layout"
 )
 
-// Biscuit is the 2nd-generation Echo Dot, and the only board anyone has run this on.
+// Biscuit is the 2nd-generation Echo Dot.
 //
 // echod is installed as Amazon's ledcontroller: taking over the definition removes the only other
 // writer of the LED ring and gets us init's supervision.
 var Biscuit = Board{
-	Device:      "biscuit_puffin",
-	Codename:    "biscuit",
-	Model:       "Echo Dot 2 (biscuit)",
-	DefaultName: "Echo Dot",
-	Caps:        Ring,
+	Device:       "biscuit_puffin",
+	Codename:     "biscuit",
+	Slotted:      true,
+	SystemAsRoot: true,
+	SignalsBoot:  true,
+	Model:        "Echo Dot 2 (biscuit)",
+	DefaultName:  "Echo Dot",
+	Caps:         Ring,
 
 	Service:     "/system/bin/ledcontroller",
 	ServiceName: "ledcontroller",
 	StockLabel:  "u:object_r:ledd_exec:s0",
+	BootHooks:   []string{layout.StartAnimation, layout.StopAnimation},
 
 	color: func(idme func(string) string) string {
 		return biscuitColor(idme("productid2"), idme("serial"))
@@ -37,11 +43,29 @@ var Biscuit = Board{
 // them can be reasoned out from here.
 var (
 	Crown    = Board{Codename: "crown", Model: "Echo Show 8 (crown)", DefaultName: "Echo Show 8"}
-	Checkers = Board{Codename: "checkers", Model: "Echo Show 5 (checkers)", DefaultName: "Echo Show 5"}
-	Cronos   = Board{Codename: "cronos", Model: "Echo Show 5 2nd gen (cronos)", DefaultName: "Echo Show 5"}
-	Donut    = Board{Codename: "donut", Model: "Echo Dot 3 (donut)", DefaultName: "Echo Dot"}
-	Rook     = Board{Codename: "rook", Model: "Echo Spot (rook)", DefaultName: "Echo Spot"}
-	Radar    = Board{Codename: "radar", Model: "Echo 2nd gen (radar)", DefaultName: "Echo"}
+	Checkers = Board{
+		Device:      "checkers",
+		Codename:    "checkers",
+		Model:       "Echo Show 5 1st gen (checkers)",
+		DefaultName: "Echo Show 5",
+
+		Service:     "/system/bin/touchlogger",
+		ServiceName: "touchlogger",
+		StockLabel:  "u:object_r:touchlogger_exec:s0",
+	}
+	Cronos = Board{
+		Device:      "cronos",
+		Codename:    "cronos",
+		Model:       "Echo Show 5 2nd gen (cronos)",
+		DefaultName: "Echo Show 5",
+
+		Service:     "/system/bin/touchlogger",
+		ServiceName: "touchlogger",
+		StockLabel:  "u:object_r:touchlogger_exec:s0",
+	}
+	Donut = Board{Codename: "donut", Model: "Echo Dot 3 (donut)", DefaultName: "Echo Dot"}
+	Rook  = Board{Codename: "rook", Model: "Echo Spot (rook)", DefaultName: "Echo Spot"}
+	Radar = Board{Codename: "radar", Model: "Echo 2nd gen (radar)", DefaultName: "Echo"}
 )
 
 // All is every board this build knows by name, whether or not it can be installed to.
@@ -64,8 +88,23 @@ func For(device string) (Board, bool) {
 	return Board{}, false
 }
 
-// Intended is the codenames this build means to support but has never met, for an error that has to
-// say what a device could have been.
+// ByCodename is the board Amazon calls this, which is how a build names the one it is for. Unlike
+// For, it also matches a board with no Device recorded.
+func ByCodename(name string) (Board, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Board{}, false
+	}
+	for _, b := range All {
+		if b.Codename == name {
+			return b, true
+		}
+	}
+	return Board{}, false
+}
+
+// Intended is the codenames this build means to support and has no Device for, so an error can say
+// what a device might have been.
 func Intended() []string {
 	var out []string
 	for _, b := range All {

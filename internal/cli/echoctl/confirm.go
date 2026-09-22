@@ -40,7 +40,6 @@ func approveFlash(ctx context.Context, out io.Writer, d *device.Device, state in
 	fmt.Fprintf(out, "  device     %s (%s)\n", d.Serial(), state.Summary)
 	fmt.Fprintf(out, "  partition  %s\n", state.Partition)
 	fmt.Fprintf(out, "  image      %s\n", image)
-	fmt.Fprintf(out, "%s\n", styleDetail.Render("  Going back means reflashing a stock boot image by hand."))
 
 	return typed(ctx, out, "Type yes to continue", "yes")
 }

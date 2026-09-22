@@ -260,6 +260,28 @@ func (d *Device) Wait(ctx context.Context, states ...string) error {
 
 // WaitBooted waits for Android to finish coming up, not merely to answer: an install that starts
 // while the framework is still starting sees services that are not there yet.
+// WaitRooted waits for the device to come back and answer as root, for a board that never reports a
+// boot: sys.boot_completed is system_server's to set, and echod keeps that switched off.
+func (d *Device) WaitRooted(ctx context.Context) error {
+	if err := d.Wait(ctx, StateOnline); err != nil {
+		return err
+	}
+
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	for {
+		if root, err := d.IsRoot(); err == nil && root {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("device: %s did not come back as root: %w", d.serial, ctx.Err())
+		case <-tick.C:
+		}
+	}
+}
+
 func (d *Device) WaitBooted(ctx context.Context) error {
 	if err := d.Wait(ctx, StateOnline); err != nil {
 		return err

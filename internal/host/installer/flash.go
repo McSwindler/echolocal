@@ -140,10 +140,10 @@ func checkImage(r *run) (string, bool, error) {
 	if len(r.cfg.BootImage) == 0 {
 		return "", false, errors.New("no boot image given")
 	}
-	if err := r.cfg.Boot.Verify(r.cfg.BootImageFrom, r.cfg.BootImage); err != nil {
+	if err := r.cfg.Profile.Boot.Verify(r.cfg.BootImageFrom, r.cfg.BootImage); err != nil {
 		return "", false, err
 	}
-	detail := fmt.Sprintf("%s, %d bytes, %s", r.cfg.BootImageFrom, r.cfg.Boot.Size, r.cfg.Boot.SHA256[:12])
+	detail := fmt.Sprintf("%s, %d bytes, %s", r.cfg.BootImageFrom, r.cfg.Profile.Boot.Size, r.cfg.Profile.Boot.SHA256[:12])
 
 	// getprop in recovery describes the recovery image, which is somebody else's build: it names neither
 	// the hardware nor the system this ramdisk pairs with, so there is nothing to compare against.
@@ -151,7 +151,7 @@ func checkImage(r *run) (string, bool, error) {
 		return detail, false, nil
 	}
 
-	untested, err := r.cfg.Boot.Supports(r.state.device, r.state.build)
+	untested, err := r.cfg.Profile.Boot.Supports(r.state.device, r.state.build)
 	if err != nil {
 		return "", false, err
 	}
@@ -213,14 +213,14 @@ func (r *run) stage() error {
 		if err != nil && try == stageTries-1 {
 			return err
 		}
-		if staged == r.cfg.Boot.SHA256 {
+		if staged == r.cfg.Profile.Boot.SHA256 {
 			return nil
 		}
 		tries = append(tries, fmt.Sprintf("%s bytes %s", sizeOf(r.d, remoteImage), staged))
 	}
 
 	return fmt.Errorf("the staged image never matched. tries: %s. want: %d bytes %s",
-		strings.Join(tries, "; "), r.cfg.Boot.Size, r.cfg.Boot.SHA256)
+		strings.Join(tries, "; "), r.cfg.Profile.Boot.Size, r.cfg.Profile.Boot.SHA256)
 }
 
 // sizeOf is what the device says is there, which is what tells a short write from a wrong one.
@@ -325,10 +325,10 @@ func checkPartition(r *run) (string, bool, error) {
 	return fmt.Sprintf("%s → %s, %d bytes", target, node, size), false, nil
 }
 
-// partition is the slot to write, refusing a device that names none: "boot" on its own is not a
-// partition here, and writing it would resolve to nothing or to something else entirely.
+// partition is the slot to write. On an A/B board an empty suffix is a failed read rather than an
+// answer, and writing "boot" there would resolve to nothing or to something else entirely.
 func (r *run) partition() (string, error) {
-	if r.state.slot == "" {
+	if r.board().Slotted && r.state.slot == "" {
 		return "", errUnknownSlot
 	}
 	return bootimg.Partition(r.state.slot), nil
@@ -371,17 +371,17 @@ func verifyImage(r *run) (string, bool, error) {
 	// Small blocks and a count, not one read of the whole image: a short read from a single huge
 	// request would hash fewer bytes and report a mismatch on a write that was fine.
 	const block = 512
-	if r.cfg.Boot.Size%block != 0 {
-		return "", false, fmt.Errorf("image size %d is not a multiple of %d", r.cfg.Boot.Size, block)
+	if r.cfg.Profile.Boot.Size%block != 0 {
+		return "", false, fmt.Errorf("image size %d is not a multiple of %d", r.cfg.Profile.Boot.Size, block)
 	}
 	got, err := sha256Of(r.d, fmt.Sprintf("dd if=%s bs=%d count=%d 2>/dev/null",
-		bootimg.Node(r.state.slot), block, r.cfg.Boot.Size/block))
+		bootimg.Node(r.state.slot), block, r.cfg.Profile.Boot.Size/block))
 	if err != nil {
 		return "", false, err
 	}
-	if got != r.cfg.Boot.SHA256 {
+	if got != r.cfg.Profile.Boot.SHA256 {
 		return "", false, fmt.Errorf("the partition hashes to %s, want %s: left in recovery, re-run to write it again",
-			got, r.cfg.Boot.SHA256)
+			got, r.cfg.Profile.Boot.SHA256)
 	}
 	return got[:12] + " matches", false, nil
 }
@@ -396,6 +396,14 @@ func bootAndroid(r *run) (string, bool, error) {
 
 	ctx, cancel := context.WithTimeout(r.ctx, androidTimeout)
 	defer cancel()
+
+	if !r.board().SignalsBoot {
+		if err := r.d.WaitRooted(ctx); err != nil {
+			return "", false, err
+		}
+		return "root adb is back", false, nil
+	}
+
 	if err := r.d.WaitBooted(ctx); err != nil {
 		return "", false, err
 	}

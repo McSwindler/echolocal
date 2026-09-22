@@ -131,13 +131,15 @@ func TestCmdline(t *testing.T) {
 
 // The partition is written with dd in fixed blocks, and the count comes from the image size, so a size
 // that is not a whole number of blocks would read back short and fail a write that was fine.
-func TestBiscuitFitsHowItIsWritten(t *testing.T) {
-	if Biscuit.Size%512 != 0 {
-		t.Errorf("image size %d is not a multiple of 512", Biscuit.Size)
-	}
-	for _, size := range PartitionSizes {
-		if Biscuit.Size >= size {
-			t.Errorf("image is %d bytes and the partition is %d", Biscuit.Size, size)
+func TestEveryImageFitsHowItIsWritten(t *testing.T) {
+	for _, img := range Images {
+		if img.Size%512 != 0 {
+			t.Errorf("%s image size %d is not a multiple of 512", img.Device, img.Size)
+		}
+		for _, size := range PartitionSizes {
+			if img.Size >= size {
+				t.Errorf("%s image is %d bytes and the partition is %d", img.Device, img.Size, size)
+			}
 		}
 	}
 }

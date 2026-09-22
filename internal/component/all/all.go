@@ -6,6 +6,10 @@
 //
 // Order is not decided here. Each component declares its phase and its place within it, so this list
 // can stay alphabetical and mean nothing but membership.
+//
+// A package too big to carry on every board goes in its own all_<thing>.go behind a
+// `//go:build board_x || board_y` line, which `make build-echod BOARD=x` sets. Everything that is
+// cheap to link belongs here and uses component.Needs to stay inert where it does not apply.
 package all
 
 import (

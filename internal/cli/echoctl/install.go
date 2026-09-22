@@ -76,7 +76,7 @@ func newInstallCmd() *cobra.Command {
 				return err
 			}
 
-			cfg := installer.Config{ZeroPSK: zeroPSK, Boot: p.Boot}
+			cfg := installer.Config{ZeroPSK: zeroPSK, Profile: p}
 
 			// The image is only resolved when it is going to be written. A device that already has root
 			// needs none, so an install onto one never touches the network.

@@ -40,14 +40,27 @@ type Board struct {
 	// what the hardware_board sensor reports.
 	Codename string
 
+	// Slotted is whether the board is A/B.
+	Slotted bool
+
+	// SystemAsRoot is whether / is the system partition rather than the boot ramdisk.
+	SystemAsRoot bool
+
+	// SignalsBoot is whether the device ever sets sys.boot_completed. A board whose framework echod
+	// keeps switched off never does, and waiting on it there is waiting for a timeout.
+	SignalsBoot bool
+
+	// BootHooks are the stock /system scripts echod takes over, the first of which init runs on the
+	// way up and so carries the rollback. Empty on a board where nothing suitable has been found.
+	BootHooks []string
+
 	// Model is what Home Assistant shows in the device panel.
 	Model string
 
 	// DefaultName is the fallback display name for a device that has none recorded.
 	DefaultName string
 
-	// Caps is what this board has. Zero on a board nobody has met is the absence of an answer rather
-	// than an answer of none.
+	// Caps is what this board has. Zero where nobody has checked, which is not the same as none.
 	Caps Cap
 
 	// Service is the Amazon init service echod is installed as, StockLabel the SELinux label its

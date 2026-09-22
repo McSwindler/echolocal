@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/ygelfand/echolocal/internal/host/device"
 )
@@ -15,7 +16,7 @@ var ErrCancelled = errors.New("cancelled")
 // connect resolves which device a command acts on and opens it. Every command goes through
 // this, so device selection behaves the same everywhere.
 func connect(ctx context.Context, out io.Writer, serial string) (*device.Device, error) {
-	target, err := resolveSerial(ctx, out, serial, device.List)
+	target, err := resolveSerial(ctx, out, serial, device.List, "")
 	if err != nil {
 		return nil, err
 	}
@@ -40,15 +41,21 @@ func attach(ctx context.Context, out io.Writer, serial string) (*device.Device, 
 	}
 }
 
+// noneOfThese is the row for a picker that listed devices but not the one being installed to.
+const noneOfThese = "None of these"
+
 func attachOnce(ctx context.Context, out io.Writer, serial string) (*device.Device, error) {
-	target, err := resolveSerial(ctx, out, serial, device.ListAny)
+	target, err := resolveSerial(ctx, out, serial, device.ListAny, noneOfThese)
 	if err != nil {
 		return nil, err
 	}
 	return device.AttachAny(target)
 }
 
-// offerRecovery says how to get a device back and waits for it to be done.
+// offerRecovery says how to get a device back and waits for one to turn up.
+//
+// What is connected when this starts is what was just turned down, so waiting means waiting for a
+// serial that is not already there rather than for any device at all.
 func offerRecovery(ctx context.Context, out io.Writer) error {
 	fmt.Fprintf(out, "\n%s\n", styleTitle.Render("Cannot reach the device"))
 	fmt.Fprintf(out, "%s\n", styleDetail.Render(
@@ -56,20 +63,46 @@ func offerRecovery(ctx context.Context, out io.Writer) error {
 			"  hold volume up while it powers on. On a device with a light, it is in\n"+
 			"  recovery once that light is solid white."))
 
-	ok, err := confirm(ctx, out, "Try again")
+	already := make(map[string]bool)
+	for _, d := range listAny() {
+		already[d.Serial] = true
+	}
+
+	fmt.Fprintf(out, "%s\n", styleDetail.Render("  Waiting for it to appear; ctrl+c to give up."))
+
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		for _, d := range listAny() {
+			if !already[d.Serial] {
+				fmt.Fprintf(out, "%s\n", styleDone.Render("✓ "+d.Serial+" appeared"))
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ErrCancelled
+		case <-tick.C:
+		}
+	}
+}
+
+// listAny is the connected devices, or none when adb cannot say.
+func listAny() []device.Info {
+	devices, err := device.ListAny()
 	if err != nil {
-		return err
+		return nil
 	}
-	if !ok {
-		return ErrCancelled
-	}
-	return nil
+	return devices
 }
 
 // resolveSerial decides which device to act on. An explicit serial always wins. On a terminal
 // the user picks, even when only one device is connected, so it is clear what is about to be
 // written to. Off a terminal there is nobody to ask, so selection is left to device.Connect.
-func resolveSerial(ctx context.Context, out io.Writer, serial string, list func() ([]device.Info, error)) (string, error) {
+// other, when set, adds a row for none of them being the one, which is reported as a device that
+// could not be reached: that is the same answer as nothing being connected, and the caller that
+// retries treats it the same way.
+func resolveSerial(ctx context.Context, out io.Writer, serial string, list func() ([]device.Info, error), other string) (string, error) {
 	if serial != "" {
 		return serial, nil
 	}
@@ -84,14 +117,17 @@ func resolveSerial(ctx context.Context, out io.Writer, serial string, list func(
 	if len(devices) == 0 {
 		return "", device.ErrUnreachable
 	}
-	return pickDevice(ctx, out, devices)
+	return pickDevice(ctx, out, devices, other)
 }
 
-func pickDevice(ctx context.Context, out io.Writer, devices []device.Info) (string, error) {
+func pickDevice(ctx context.Context, out io.Writer, devices []device.Info, other string) (string, error) {
 	chosen, err := choose(ctx, out, "Select a device", devices,
-		func(d device.Info) string { return fmt.Sprintf("%s  %s", d, d.Serial) }, "")
+		func(d device.Info) string { return fmt.Sprintf("%s  %s", d, d.Serial) }, other)
 	if err != nil {
 		return "", err
+	}
+	if chosen.Serial == "" {
+		return "", device.ErrUnreachable
 	}
 	return chosen.Serial, nil
 }

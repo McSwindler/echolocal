@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/layout"
 )
 
@@ -49,8 +50,11 @@ exit 0
 // amazon.headless.BOOT_COMPLETED, a minute or so into the boot, while a trial is not committed until the
 // first heartbeat several minutes later — a rollback there would tear out an update that was doing
 // nothing wrong.
+// hooks is the board's, indirected so a test can point it at a temporary directory.
+var hooks = func() []string { return board.Detect().BootHooks }
+
 func Script(path string) string {
-	if path == layout.StartAnimation {
+	if h := hooks(); len(h) > 0 && path == h[0] {
 		return Rollback
 	}
 	return Stub
@@ -61,7 +65,7 @@ func Script(path string) string {
 // ordinary start does not touch /system at all.
 func Ensure() {
 	var stale []string
-	for _, path := range layout.AnimationScripts {
+	for _, path := range hooks() {
 		want := Script(path)
 		if have, err := os.ReadFile(path); err == nil && string(have) == want {
 			continue

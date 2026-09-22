@@ -50,8 +50,12 @@ func (r *run) patchInitRC(at string, edits ...rcEdit) (int, error) {
 
 // initRC lists every rc file init reads.
 func (r *run) initRC(at string) ([]string, error) {
-	found, err := r.d.Shell(fmt.Sprintf("ls %s/*.rc %s/system/etc/init/*.rc %s/vendor/etc/init/*.rc 2>/dev/null",
-		at, at, at))
+	globs := []string{at + "/system/etc/init/*.rc", at + "/vendor/etc/init/*.rc"}
+	if r.board().SystemAsRoot {
+		globs = append([]string{at + "/*.rc"}, globs...)
+	}
+
+	found, err := r.d.Shell("ls " + strings.Join(globs, " ") + " 2>/dev/null")
 	if err != nil {
 		return nil, fmt.Errorf("listing the init rc files: %w", err)
 	}
@@ -145,13 +149,17 @@ func disableVerity(r *run) (string, bool, error) {
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
+	if r.system().Empty() {
+		return "nothing on the system partition to disable", true, nil
+	}
 
 	dev, err := r.systemNode()
 	if err != nil {
 		return "", false, err
 	}
+	at := r.system().VerityOffset
 
-	magic, err := r.peek(dev, sysimg.VerityOffset, len(sysimg.DisabledBytes))
+	magic, err := r.peek(dev, at, len(sysimg.DisabledBytes))
 	if err != nil {
 		return "", false, err
 	}
@@ -164,11 +172,11 @@ func disableVerity(r *run) (string, bool, error) {
 		return "already disabled", true, nil
 	}
 
-	if err := r.poke(dev, sysimg.VerityOffset, sysimg.DisabledBytes); err != nil {
+	if err := r.poke(dev, at, sysimg.DisabledBytes); err != nil {
 		return "", false, err
 	}
 
-	if magic, err = r.peek(dev, sysimg.VerityOffset, len(sysimg.DisabledBytes)); err != nil {
+	if magic, err = r.peek(dev, at, len(sysimg.DisabledBytes)); err != nil {
 		return "", false, err
 	}
 	if off, err := sysimg.Verity(magic); err != nil || !off {
@@ -183,6 +191,9 @@ func patchSystem(r *run) (string, bool, error) {
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
+	if r.system().Empty() {
+		return "the root filesystem is in the boot image", true, nil
+	}
 
 	at, err := r.mountSystem()
 	if err != nil {
@@ -194,23 +205,21 @@ func patchSystem(r *run) (string, bool, error) {
 		}
 	}()
 
-	files := []struct {
-		patch sysimg.Patch
-		data  []byte
-	}{
-		{sysimg.DefaultProp, assets.DefaultProp()},
-		{sysimg.Fstab, assets.Fstab()},
-	}
+	layout := r.system()
 
-	written := make([]string, 0, len(files)+3)
-	for _, f := range files {
-		if err := f.patch.Verify(f.data); err != nil {
+	written := make([]string, 0, len(layout.Patches)+3)
+	for _, p := range layout.Patches {
+		data, err := assets.Patch(p.File)
+		if err != nil {
 			return "", false, err
 		}
-		if err := r.writeInPlace(at+"/"+f.patch.Path, f.data); err != nil {
+		if err := p.Verify(data); err != nil {
 			return "", false, err
 		}
-		written = append(written, f.patch.Path)
+		if err := r.writeInPlace(at+"/"+p.Path, data); err != nil {
+			return "", false, err
+		}
+		written = append(written, p.Path)
 	}
 
 	// init reads a service block once, at boot. The install has to start echod in the run that writes
@@ -243,7 +252,8 @@ func patchSystem(r *run) (string, bool, error) {
 // The rc files live on the system partition, which the install has already remounted, and paths here
 // are absolute because this runs against a booted Android rather than a mount in recovery.
 func deAmazon(r *run) (string, bool, error) {
-	disable, enable := services.DisabledSet(), services.EnabledSet()
+	p := r.cfg.Profile
+	disable, enable := services.Set(p.Disable), services.Set(p.Enable)
 
 	changed, err := r.patchInitRC("",
 		func(s string) (string, []string) { return services.Disable(s, disable) },
@@ -263,7 +273,7 @@ func deAmazon(r *run) (string, bool, error) {
 	}
 
 	if changed == 0 && len(stopped) == 0 {
-		return fmt.Sprintf("%d already disabled and none running", len(services.Disabled)), true, nil
+		return fmt.Sprintf("%d already disabled and none running", len(p.Disable)), true, nil
 	}
 
 	// The rc edits are what the next boot reads. Stopping frees the hardware now, but init started
@@ -300,7 +310,7 @@ func (r *run) stopServices() ([]string, error) {
 	running := runningServices(props)
 
 	var stopped []string
-	for _, name := range services.Disabled {
+	for _, name := range r.cfg.Profile.Disable {
 		if !running[name] {
 			continue
 		}
@@ -330,22 +340,23 @@ func runningServices(props string) map[string]bool {
 // patchAdbd flips the four bytes that stop the stock adbd dropping privileges. A build these offsets
 // were not taken from is refused rather than overwritten.
 func (r *run) patchAdbd(dir string) (string, error) {
-	path := dir + "/" + sysimg.Adbd.Path
+	adbd := r.system().Adbd
+	path := dir + "/" + adbd.Path
 
-	current, err := r.peek(path, sysimg.Adbd.Offset, len(sysimg.Adbd.Before))
+	current, err := r.peek(path, adbd.Offset, len(adbd.Before))
 	if err != nil {
 		return "", err
 	}
 
 	switch {
-	case bytes.Equal(current, sysimg.Adbd.After):
+	case bytes.Equal(current, adbd.After):
 		return "already patched", nil
-	case !bytes.Equal(current, sysimg.Adbd.Before):
+	case !bytes.Equal(current, adbd.Before):
 		return "", fmt.Errorf("%s reads %x at %d, which is neither the stock bytes nor ours",
-			path, current, sysimg.Adbd.Offset)
+			path, current, adbd.Offset)
 	}
 
-	if err := r.poke(path, sysimg.Adbd.Offset, sysimg.Adbd.After); err != nil {
+	if err := r.poke(path, adbd.Offset, adbd.After); err != nil {
 		return "", err
 	}
 	return "patched", nil
@@ -406,7 +417,11 @@ func (r *run) neuterOTA(at string) error {
 	if err != nil {
 		return err
 	}
-	return r.writeInPlace(path, setProp(current, sysimg.OTAKey, sysimg.OTAValue))
+	layout := r.system()
+	if layout.OTAKey == "" {
+		return nil
+	}
+	return r.writeInPlace(path, setProp(current, layout.OTAKey, layout.OTAValue))
 }
 
 // setProp replaces a property in a build.prop, or appends it where there is none.
@@ -425,7 +440,7 @@ func setProp(file []byte, key, value string) []byte {
 
 // systemNode is the system partition for the slot the device is running.
 func (r *run) systemNode() (string, error) {
-	if r.state.slot == "" {
+	if r.board().Slotted && r.state.slot == "" {
 		return "", errUnknownSlot
 	}
 	return sysimg.Node(r.state.slot), nil

@@ -13,6 +13,7 @@ REPO ?= ygelfand/echolocal
 RELEASES ?= https://github.com/$(REPO)/releases
 
 BUILDVARS := github.com/ygelfand/echolocal/internal/layout
+BOARDVARS := github.com/ygelfand/echolocal/internal/board
 LDFLAGS := -X '$(BUILDVARS).Version=$(VERSION)' \
 	-X '$(BUILDVARS).GitCommit=$(GIT_COMMIT)' \
 	-X '$(BUILDVARS).BuildDate=$(BUILD_DATE)'
@@ -27,13 +28,26 @@ ASSET_DIR := internal/host/assets/payload
 ARCHES := arm64 arm
 DOT_ARCH ?= arm
 DEVICE_ENV := GOOS=linux GOARCH=$(DOT_ARCH) CGO_ENABLED=0
-DEVICE_LDFLAGS := -s -w $(LDFLAGS)
-DEVICE_BIN := $(BUILD_DIR)/echod-$(DOT_ARCH)
+
+# BOARD builds for one board: links its board_<codename> packages and pins Detect. Unset builds for all.
+BOARD ?=
+
+# Boards needing a build of their own, read off the board tags in component/all. Empty is the normal
+# case, where every board takes the shared binary.
+BOARD_BUILDS := $(shell grep -h '^//go:build' internal/component/all/*.go 2>/dev/null | \
+	grep -o 'board_[a-z0-9]*' | sed 's/^board_//' | sort -u)
 
 # TAGS passes build tags through to echod, which is how the same device can be measured both ways:
 # `make install-echod TAGS=noasm` builds the portable dot instead of the NEON one.
 TAGS ?=
-DEVICE_TAGS := $(if $(TAGS),-tags $(TAGS),)
+empty :=
+space := $(empty) $(empty)
+comma := ,
+ALL_TAGS := $(strip $(TAGS) $(if $(BOARD),board_$(BOARD)))
+DEVICE_TAGS := $(if $(ALL_TAGS),-tags $(subst $(space),$(comma),$(ALL_TAGS)),)
+
+DEVICE_LDFLAGS := -s -w $(LDFLAGS) $(if $(BOARD),-X '$(BOARDVARS).pinned=$(BOARD)')
+DEVICE_BIN := $(BUILD_DIR)/echod$(if $(BOARD),-$(BOARD))-$(DOT_ARCH)
 
 ADB ?= adb
 DEVICE_TMP := /data/local/tmp
@@ -65,8 +79,12 @@ build-echod: ## Cross-compile echod for the Echo Dot (DOT_ARCH=arm64 for a Fire 
 	$(DEVICE_ENV) go build $(DEVICE_TAGS) -ldflags "$(DEVICE_LDFLAGS)" -o $(DEVICE_BIN) ./cmd/echod
 
 .PHONY: build-echod-all
-build-echod-all:
+build-echod-all: ## Build every binary a release publishes, from a clean bin
+	@rm -f $(BUILD_DIR)/echod-*
 	@for a in $(ARCHES); do $(MAKE) --no-print-directory build-echod DOT_ARCH=$$a; done
+	@for b in $(BOARD_BUILDS); do \
+		for a in $(ARCHES); do $(MAKE) --no-print-directory build-echod DOT_ARCH=$$a BOARD=$$b; done; \
+	done
 
 .PHONY: run-echoctl
 run-echoctl: ## Run echoctl on the host (make run-echoctl ARGS="tools tone -h")
@@ -194,6 +212,7 @@ manifest: build-echod-all ## Write the manifest a device fetches to find this bu
 		-from "$(FROM)" \
 		-arm64 $(BUILD_DIR)/echod-arm64 \
 		-arm $(BUILD_DIR)/echod-arm \
+		$(foreach b,$(BOARD_BUILDS),$(foreach a,$(ARCHES),-board $(b):$(a):$(BUILD_DIR)/echod-$(b)-$(a) )) \
 		-title "EchoLocal $(AT)" \
 		-release-url "$(PAGE)" \
 		-out $(BUILD_DIR)/manifest.json
@@ -233,7 +252,7 @@ release-dev: ## Publish this working tree to the dev channel, without pushing an
 	@$(MAKE) --no-print-directory manifest VERSION=$(VERSION) FROM=$(RELEASES)/download/dev PAGE=$(RELEASES)/tag/dev
 	@gh release view dev >/dev/null 2>&1 || \
 		gh release create dev --prerelease --title dev --notes "Rolling build for devices on the dev channel."
-	gh release upload dev dist/echolocal_* $(BUILD_DIR)/echod-arm64 $(BUILD_DIR)/echod-arm $(BUILD_DIR)/manifest.json --clobber
+	gh release upload dev dist/echolocal_* $(BUILD_DIR)/echod-* $(BUILD_DIR)/manifest.json --clobber
 	@echo "dev channel now serves $(VERSION)"
 
 .PHONY: release

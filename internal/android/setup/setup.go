@@ -146,7 +146,9 @@ func (Setup) Run(ctx context.Context) error {
 // ApplyLate waits for the boot to finish and then applies Late. It is meant to be run in its own
 // goroutine, and returns without applying anything if the boot never completes.
 func ApplyLate(ctx context.Context) {
-	if !bootCompleted(ctx) {
+	// Waiting is what keeps a stop from being undone by the start that follows it. A board that never
+	// signals a boot never fires those triggers either, so there is nothing to be ordered against.
+	if component.Board().SignalsBoot && !bootCompleted(ctx) {
 		return
 	}
 	apply("late setup", Late)

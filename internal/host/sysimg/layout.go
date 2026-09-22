@@ -7,6 +7,10 @@ package sysimg
 // Every number in one was measured against a particular system image. Sharing a layout between
 // boards would mean writing bytes at an offset measured on a different filesystem, which is why
 // these belong to a board rather than to the package.
+//
+// A zero Layout is a board that needs none of it. Where the root filesystem lives in the boot
+// ramdisk rather than on the system partition, the fstab, the properties and adbd all ride in the
+// image we write, and an fstab with no verify flag leaves nothing for dm-verity to check.
 type Layout struct {
 	// VerityOffset is where the system partition's dm-verity metadata starts.
 	VerityOffset int64
@@ -21,6 +25,11 @@ type Layout struct {
 	OTAKey, OTAValue string
 }
 
+// Empty reports whether the system partition needs nothing written to it.
+func (l Layout) Empty() bool {
+	return l.VerityOffset == 0 && len(l.Patches) == 0 && l.Adbd.Path == ""
+}
+
 // BinPatch is bytes overwritten in place at a fixed offset in a file. Patching rather than replacing
 // the binary means a build this was not derived from is refused instead of overwritten.
 type BinPatch struct {
@@ -29,8 +38,7 @@ type BinPatch struct {
 	Before, After []byte
 }
 
-// Biscuit is the 2nd-generation Echo Dot's system partition, the only one any of this was measured
-// against.
+// Biscuit is the 2nd-generation Echo Dot's system partition.
 var Biscuit = Layout{
 	VerityOffset: VerityOffset,
 	Patches:      []Patch{DefaultProp, Fstab},
@@ -38,3 +46,16 @@ var Biscuit = Layout{
 	OTAKey:       OTAKey,
 	OTAValue:     OTAValue,
 }
+
+// Checkers and Cronos keep their root filesystem in the boot ramdisk, so nothing is written to the
+// system partition and no fstab asks for dm-verity.
+var (
+	Checkers = Layout{
+		OTAKey:   OTAKey,
+		OTAValue: OTAValue,
+	}
+	Cronos = Layout{
+		OTAKey:   OTAKey,
+		OTAValue: OTAValue,
+	}
+)

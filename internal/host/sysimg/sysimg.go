@@ -45,7 +45,11 @@ const (
 
 // Patch is one file written onto the mounted system partition, and what it has to be. It replaces the
 // contents of a file that is already there, so the mode and owner are whatever the stock file carried.
+//
+// File is the committed copy under internal/host/assets/patch, and Path where it lands on the device.
+// They are separate because two boards can want different bytes at the same destination.
 type Patch struct {
+	File   string
 	Path   string
 	SHA256 string
 	Size   int64
@@ -53,11 +57,13 @@ type Patch struct {
 
 var (
 	DefaultProp = Patch{
+		File:   "biscuit/default.prop",
 		Path:   "default.prop",
 		SHA256: "9090f348d70531d9f9794ae3036481f4508ea20dbedd703465338f1ce4169a1d",
 		Size:   579,
 	}
 	Fstab = Patch{
+		File:   "biscuit/fstab.mt8163",
 		Path:   "fstab.mt8163",
 		SHA256: "43d9039682c9af8c9f3b59eceb6e1baaf03abb5d575123df071f6d3f5961d881",
 		Size:   1470,

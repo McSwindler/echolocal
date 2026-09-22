@@ -29,7 +29,7 @@ func TestOnlyTheEarlyHookRollsBack(t *testing.T) {
 // Whatever else it does, it has to end in a way init is happy with and never run ledctrl, which is the
 // original reason for replacing it.
 func TestBothHooksExitCleanlyAndNeverCallLedctrl(t *testing.T) {
-	for _, path := range layout.AnimationScripts {
+	for _, path := range hooks() {
 		script := Script(path)
 
 		if !strings.HasPrefix(script, "#!/system/bin/sh\n") {
@@ -67,9 +67,9 @@ func TestEnsureLeavesCurrentHooksAlone(t *testing.T) {
 	dir := t.TempDir()
 	paths := []string{filepath.Join(dir, "start.sh"), filepath.Join(dir, "stop.sh")}
 
-	restore := layout.AnimationScripts
-	t.Cleanup(func() { layout.AnimationScripts = restore; writable = remount })
-	layout.AnimationScripts = paths
+	restore := hooks
+	t.Cleanup(func() { hooks = restore; writable = remount })
+	hooks = func() []string { return paths }
 
 	var remounts int
 	writable = func(bool) error { remounts++; return nil }

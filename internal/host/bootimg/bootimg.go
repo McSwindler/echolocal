@@ -88,9 +88,33 @@ var Biscuit = Image{
 	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-biscuit.img",
 }
 
+// Checkers is the boot image for a 1st-generation Echo Show 5.
+var Checkers = Image{
+	SHA256:  "c7cd1b163c212c8f15a02d637e2a8bc4e0732944aef30b16dd8ff7f75b205a27",
+	Size:    8142848,
+	Cmdline: "androidboot.selinux=permissive",
+	Build:   13222531716,
+	Device:  "checkers",
+
+	File: "boot/echolocal-boot-checkers.img",
+	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-checkers.img",
+}
+
+// Cronos is the boot image for a 2nd-generation Echo Show 5.
+var Cronos = Image{
+	SHA256:  "b8c261f1af181fc7705c35e0d318b7356667711b5ab0c58e92601a2d1b4a102f",
+	Size:    8624128,
+	Cmdline: "androidboot.selinux=permissive",
+	Build:   13222531716,
+	Device:  "cronos",
+
+	File: "boot/echolocal-boot-cronos.img",
+	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-cronos.img",
+}
+
 // Images is every boot image this build knows, which is what `make boot-images` publishes and what
 // the tests check against the files in the tree.
-var Images = []Image{Biscuit}
+var Images = []Image{Biscuit, Checkers, Cronos}
 
 // Asset is the name this image is published under, which is the last segment of its URL.
 func (i Image) Asset() string {
