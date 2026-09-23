@@ -44,10 +44,12 @@ var Biscuit = Board{
 var (
 	Crown    = Board{Codename: "crown", Model: "Echo Show 8 (crown)", DefaultName: "Echo Show 8"}
 	Checkers = Board{
-		Device:      "checkers",
-		Codename:    "checkers",
-		Model:       "Echo Show 5 1st gen (checkers)",
-		DefaultName: "Echo Show 5",
+		Device:        "checkers",
+		Codename:      "checkers",
+		Model:         "Echo Show 5 1st gen (checkers)",
+		DefaultName:   "Echo Show 5",
+		Caps:          Panel,
+		PanelRotation: 270,
 
 		// surfaceflinger owns the panel: it holds /dev/graphics/fb0 and is what starts the boot
 		// animation, so taking it over is what lets echod draw at all.

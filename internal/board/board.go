@@ -27,6 +27,9 @@ const (
 	// Ring is the twelve-segment LED ring. It gates the ring driver and the light and room
 	// components, which have nothing to present without it.
 	Ring Cap = 1 << iota
+
+	// Panel is a screen reached through the kernel framebuffer.
+	Panel
 )
 
 // Board is a model of device.
@@ -62,6 +65,11 @@ type Board struct {
 
 	// Caps is what this board has. Zero where nobody has checked, which is not the same as none.
 	Caps Cap
+
+	// PanelRotation turns the picture the right way up, in degrees from the framebuffer's own
+	// orientation. Only somebody looking at the device can say: a capture reads back through the
+	// same rotation it was drawn with, so it looks correct either way.
+	PanelRotation int
 
 	// Service is the Amazon init service echod is installed as, StockLabel the SELinux label its
 	// binary carries before we replace it. Taking over a service is how echod gets init's
