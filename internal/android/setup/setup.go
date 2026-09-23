@@ -50,6 +50,7 @@ var Actions = []Action{
 	stop("perfrecoveryd", "Amazon's performance monitoring"),
 	stop("avahi-daemon", "Amazon's mDNS, for Spotify Connect; echod advertises itself"),
 	stop("drm", "drmserver, for protected media playback"),
+	stop("kisd", "MediaTek's DRM key provisioning, which reaches the TEE through /dev/trustzone"),
 	{
 		Name: "take the pin controller back from mediaserver",
 		Reason: "the vendor audio HAL clears the microphone mute line while it sets up an input path, " +

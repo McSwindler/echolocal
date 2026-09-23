@@ -245,6 +245,33 @@ func patchSystem(r *run) (string, bool, error) {
 	return strings.Join(append(written, "adbd "+adbd), ", "), false, nil
 }
 
+// serviceAsRoot makes the service echod is installed as run as root, which the one it replaces need
+// not have done: surfaceflinger is user system, and echod needs root for the audio devices, the GPIO
+// lines and the remount an update does.
+//
+// Its own step because a board whose root filesystem is in the boot image never reaches patchSystem,
+// where the flash stage does this against a mount in recovery. Here it runs against the live system,
+// which the install has already remounted. Idempotent: AsRoot reports nothing changed once the block
+// carries a seclabel and no user or group, so a re-run writes nothing.
+func serviceAsRoot(r *run) (string, bool, error) {
+	name := r.board().ServiceName
+
+	changed, err := r.patchInitRC("",
+		func(s string) (string, []string) { return services.AsRoot(s, name) },
+	)
+	if err != nil {
+		return "", false, err
+	}
+	if changed == 0 {
+		return "already root", true, nil
+	}
+
+	// init reads the block at start-up, so this is only true of the process running now if the
+	// install started it afterwards.
+	r.reboot = true
+	return fmt.Sprintf("%d lines changed", changed), false, nil
+}
+
 // deAmazon stops Amazon's services and keeps them from starting again. It is an install step rather
 // than a flash one: root says nothing about whether it has been done, so a device that already has
 // root would otherwise never get it.

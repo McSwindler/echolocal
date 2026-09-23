@@ -49,9 +49,11 @@ var (
 		Model:       "Echo Show 5 1st gen (checkers)",
 		DefaultName: "Echo Show 5",
 
-		Service:     "/system/bin/touchlogger",
-		ServiceName: "touchlogger",
-		StockLabel:  "u:object_r:touchlogger_exec:s0",
+		// surfaceflinger owns the panel: it holds /dev/graphics/fb0 and is what starts the boot
+		// animation, so taking it over is what lets echod draw at all.
+		Service:     "/system/bin/surfaceflinger",
+		ServiceName: "surfaceflinger",
+		StockLabel:  "u:object_r:surfaceflinger_exec:s0",
 	}
 	Cronos = Board{
 		Device:      "cronos",
@@ -59,9 +61,9 @@ var (
 		Model:       "Echo Show 5 2nd gen (cronos)",
 		DefaultName: "Echo Show 5",
 
-		Service:     "/system/bin/touchlogger",
-		ServiceName: "touchlogger",
-		StockLabel:  "u:object_r:touchlogger_exec:s0",
+		Service:     "/system/bin/surfaceflinger",
+		ServiceName: "surfaceflinger",
+		StockLabel:  "u:object_r:surfaceflinger_exec:s0",
 	}
 	Donut = Board{Codename: "donut", Model: "Echo Dot 3 (donut)", DefaultName: "Echo Dot"}
 	Rook  = Board{Codename: "rook", Model: "Echo Spot (rook)", DefaultName: "Echo Spot"}
