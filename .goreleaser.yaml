@@ -9,7 +9,6 @@ before:
   hooks:
     - make vet
     - make test
-    - make payload
     - make manifest
 
 builds:
@@ -18,8 +17,6 @@ builds:
     binary: echoctl
     env:
       - CGO_ENABLED=0
-    tags:
-      - payload
     goos:
       - linux
       - darwin

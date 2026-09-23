@@ -19,13 +19,17 @@ LDFLAGS := -X '$(BUILDVARS).Version=$(VERSION)' \
 	-X '$(BUILDVARS).BuildDate=$(BUILD_DATE)'
 
 BUILD_DIR := bin
-ASSET_DIR := internal/host/assets/payload
 
 # echod targets the Echo Dot 2: MT8163, Android 5.1 (API 22). FireOS 5 runs an arm64 kernel; FireOS 6
 # ships a 32-bit kernel on the same hardware, which cannot exec arm64 at all.
 # The ALSA path is pure Go over /dev/snd ioctls, so no cgo and no NDK. Keep it that way unless
 # something genuinely needs C, which is what would make a toolchain image worth having.
 ARCHES := arm64 arm
+
+# Every board with a build of its own runs Fire OS 6, which is 32-bit: checkers and biscuit both
+# report armeabi-v7a. arm64 is the shared build's alone, for a Dot still on Fire OS 5.
+BOARD_ARCHES := arm
+
 DOT_ARCH ?= arm
 DEVICE_ENV := GOOS=linux GOARCH=$(DOT_ARCH) CGO_ENABLED=0
 
@@ -95,7 +99,7 @@ build-echod-all: ## Build every binary a release publishes, from a clean bin
 	@rm -f $(BUILD_DIR)/echod-*
 	@for a in $(ARCHES); do $(MAKE) --no-print-directory build-echod DOT_ARCH=$$a; done
 	@for b in $(BOARD_BUILDS); do \
-		for a in $(ARCHES); do $(MAKE) --no-print-directory build-echod DOT_ARCH=$$a BOARD=$$b; done; \
+		for a in $(BOARD_ARCHES); do $(MAKE) --no-print-directory build-echod DOT_ARCH=$$a BOARD=$$b; done; \
 	done
 
 .PHONY: run-echoctl
@@ -162,17 +166,14 @@ device: ## Say which device the device targets would write to, and refuse an unk
 		echo "these targets remount /system, so an unrecognised device is refused"; exit 1; }
 	@go run ./cmd/echoctl board $(SERIAL)
 
-.PHONY: payload
-payload: ## Stage echod for embedding into echoctl
-	@$(MAKE) --no-print-directory build-echod DOT_ARCH=arm
-	@mkdir -p $(ASSET_DIR)
-	cp $(BUILD_DIR)/echod-arm $(ASSET_DIR)/echod
-	@shasum -a 256 $(ASSET_DIR)/echod | awk '{print $$1}' > $(ASSET_DIR)/echod.sha256
-
 .PHONY: dist
-dist: payload ## Full build: echod, then echoctl carrying it
-	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 go build -tags payload -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/echoctl ./cmd/echoctl
+dist: ## Every echod, a manifest naming them in bin/, and an echoctl that installs from it
+	@$(MAKE) --no-print-directory manifest FROM=file://$(CURDIR)/$(BUILD_DIR)
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/echoctl ./cmd/echoctl
+
+.PHONY: install
+install: dist ## Install onto an attached device from the locally built manifest
+	$(BUILD_DIR)/echoctl install --manifest $(BUILD_DIR)/manifest.json $(ARGS)
 
 .PHONY: install-echod
 install-echod: ## Install echod into /system/app/echod, built for whatever board is attached
@@ -228,10 +229,6 @@ shell: ## Open a root shell on a connected device
 
 ##@ Build & Release
 
-.PHONY: install
-install: ## go install echoctl into $$GOPATH/bin
-	go install -ldflags "$(LDFLAGS)" ./cmd/echoctl
-
 AT ?= $(VERSION)
 FROM ?= $(RELEASES)/download/$(AT)
 PAGE ?= $(RELEASES)/tag/$(AT)
@@ -244,7 +241,7 @@ manifest: build-echod-all ## Write the manifest a device fetches to find this bu
 		-from "$(FROM)" \
 		-arm64 $(BUILD_DIR)/echod-arm64 \
 		-arm $(BUILD_DIR)/echod-arm \
-		$(foreach b,$(BOARD_BUILDS),$(foreach a,$(ARCHES),-board $(b):$(a):$(BUILD_DIR)/echod-$(b)-$(a) )) \
+		$(foreach b,$(BOARD_BUILDS),$(foreach a,$(BOARD_ARCHES),-board $(b):$(a):$(BUILD_DIR)/echod-$(b)-$(a) )) \
 		-title "EchoLocal $(AT)" \
 		-release-url "$(PAGE)" \
 		-out $(BUILD_DIR)/manifest.json

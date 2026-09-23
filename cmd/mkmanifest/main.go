@@ -88,7 +88,11 @@ func run(m update.Manifest, from string, builds map[string]string, perBoard []bo
 	for _, b := range profile.Boards() {
 		m.Boards[b.Codename] = maps.Clone(m.Binaries)
 	}
+	own := map[string]map[string]update.Binary{}
 
+	// A board with builds of its own is served only by those: the shared build links different
+	// components, so offering it for an architecture the board build skipped hands that device the
+	// wrong binary rather than none.
 	for _, pb := range perBoard {
 		if _, ok := m.Boards[pb.Board]; !ok {
 			return fmt.Errorf("mkmanifest: -board names %q, which is not a board this build installs onto", pb.Board)
@@ -98,7 +102,12 @@ func run(m update.Manifest, from string, builds map[string]string, perBoard []bo
 			return err
 		}
 		b.URL = from + "/" + filepath.Base(pb.Path)
-		m.Boards[pb.Board][pb.Arch] = b
+
+		if own[pb.Board] == nil {
+			own[pb.Board] = map[string]update.Binary{}
+			m.Boards[pb.Board] = own[pb.Board]
+		}
+		own[pb.Board][pb.Arch] = b
 	}
 
 	arm64 := m.Binaries["arm64"]
