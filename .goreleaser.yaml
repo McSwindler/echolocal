@@ -1,5 +1,10 @@
 version: 2
 
+git:
+  ignore_tags:
+    - boot-images
+    - dev
+
 before:
   hooks:
     - make vet
