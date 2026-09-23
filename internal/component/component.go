@@ -90,6 +90,32 @@ type Handler interface {
 	esphome.Handler
 }
 
+// Startup is a component the boot screen shows while the device comes up.
+//
+// Running is not the same as ready: the radio is running long before it has associated, and a wake
+// word engine long before it has warmed up. This is the component's own answer.
+type Startup interface {
+	Startup() Progress
+}
+
+// Progress is what one component says about coming up. Implementing Startup is what puts it on the
+// boot screen: the device waits for one that is not Done, and carries on past one that says Failed.
+type Progress struct {
+	// Name is filled in by the registry.
+	Name string
+
+	Done bool
+
+	// Failed is a component that will not be coming up. The boot screen marks it and stops waiting.
+	Failed bool
+
+	// Doing is what it is waiting on, or why it failed.
+	Doing string
+}
+
+// Settled reports whether the boot screen has stopped waiting for this one.
+func (p Progress) Settled() bool { return p.Done || p.Failed }
+
 // Restorer puts the component back the way the device was left, once, at start-up.
 type Restorer interface {
 	Restore(config.Config)

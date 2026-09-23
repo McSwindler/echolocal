@@ -20,6 +20,7 @@ import (
 	_ "github.com/ygelfand/echolocal/internal/feature/buttons"
 	_ "github.com/ygelfand/echolocal/internal/feature/control"
 	_ "github.com/ygelfand/echolocal/internal/feature/detect"
+	_ "github.com/ygelfand/echolocal/internal/feature/dhcp"
 	_ "github.com/ygelfand/echolocal/internal/feature/diag"
 	_ "github.com/ygelfand/echolocal/internal/feature/feedback"
 	_ "github.com/ygelfand/echolocal/internal/feature/firmware"
@@ -35,4 +36,5 @@ import (
 	_ "github.com/ygelfand/echolocal/internal/feature/timer"
 	_ "github.com/ygelfand/echolocal/internal/feature/voice"
 	_ "github.com/ygelfand/echolocal/internal/feature/wakeword"
+	_ "github.com/ygelfand/echolocal/internal/hardware/wifi"
 )

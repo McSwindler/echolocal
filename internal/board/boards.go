@@ -48,7 +48,7 @@ var (
 		Codename:      "checkers",
 		Model:         "Echo Show 5 1st gen (checkers)",
 		DefaultName:   "Echo Show 5",
-		Caps:          Panel,
+		Caps:          Panel | Wifi,
 		PanelRotation: 270,
 
 		// surfaceflinger owns the panel: it holds /dev/graphics/fb0 and is what starts the boot
@@ -58,10 +58,12 @@ var (
 		StockLabel:  "u:object_r:surfaceflinger_exec:s0",
 	}
 	Cronos = Board{
-		Device:      "cronos",
-		Codename:    "cronos",
-		Model:       "Echo Show 5 2nd gen (cronos)",
-		DefaultName: "Echo Show 5",
+		Device:        "cronos",
+		Codename:      "cronos",
+		Model:         "Echo Show 5 2nd gen (cronos)",
+		DefaultName:   "Echo Show 5",
+		Caps:          Panel | Wifi,
+		PanelRotation: 270,
 
 		Service:     "/system/bin/surfaceflinger",
 		ServiceName: "surfaceflinger",

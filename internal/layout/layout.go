@@ -29,10 +29,6 @@ const (
 	UpdatingPath = StateDir + "/updating"
 )
 
-// BackupSuffix marks a stock file we moved aside, whether that is the service echod was installed
-// as or one of the boot animation wrappers. Which service that is belongs to the board.
-const BackupSuffix = ".orig"
-
 // The boot animation wrappers init runs; both call ledctrl, which waits on a binder service echod does
 // not publish. StartAnimation runs on the way up and StopAnimation once Android reports the boot
 // finished, which is the difference that decides what may go in them.
@@ -61,6 +57,16 @@ const (
 	// RolledBackProp is set by the boot hook when it puts the previous binary back, so the failure
 	// reaches Home Assistant instead of only logcat.
 	RolledBackProp = "echolocal.rolledback"
+)
+
+// Where the supplicant keeps its configuration and control socket. echoctl writes the configuration
+// at install and echod drives the supplicant over the socket, so both have to name the same paths.
+const (
+	WifiDir     = "/data/misc/wifi"
+	WifiConf    = WifiDir + "/wpa_supplicant.conf"
+	WifiSockets = WifiDir + "/sockets"
+	WifiIface   = "wlan0"
+	WifiUser    = 1010
 )
 
 // LogTag is echod's logcat tag: `adb logcat -s echolocal`.

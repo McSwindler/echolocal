@@ -13,7 +13,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/ygelfand/echolocal/internal/host/assets"
 	"github.com/ygelfand/echolocal/internal/host/device"
 	"github.com/ygelfand/echolocal/internal/host/installer"
 )
@@ -36,6 +35,7 @@ func newInstallCmd() *cobra.Command {
 	var (
 		serial    string
 		echod     string
+		manifest  string
 		name      string
 		bootImage string
 		ssid      string
@@ -108,7 +108,7 @@ func newInstallCmd() *cobra.Command {
 				return nil
 			}
 
-			if cfg.Echod, _, err = payload(assets.Echod(), echod, "echod binary"); err != nil {
+			if cfg.Echod, _, err = resolveEchod(cmd.Context(), out, d, p, manifest, echod); err != nil {
 				return err
 			}
 			chosen, err := resolveName(cmd.Context(), out, d, name)
@@ -152,7 +152,9 @@ func newInstallCmd() *cobra.Command {
 	}
 
 	c.Flags().StringVar(&serial, "serial", "", "device serial, when more than one is connected")
-	c.Flags().StringVar(&echod, "echod", "", "echod binary to install, instead of the one shipped")
+	c.Flags().StringVar(&echod, "echod", "", "echod binary to install, instead of fetching one")
+	c.Flags().StringVar(&manifest, "manifest", "",
+		"manifest to resolve echod from, as a url or a local file, instead of the release channel")
 	c.Flags().StringVar(&bootImage, "boot-image", "", "boot image to write, instead of the one shipped")
 	c.Flags().StringVar(&ssid, "ssid", "", "network to join, instead of picking from a scan")
 	c.Flags().StringVar(&password, "password", "", "passphrase, for an --ssid that needs one")

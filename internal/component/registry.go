@@ -23,9 +23,9 @@ type Registry struct {
 	mu      sync.Mutex
 	entries []*entry
 
-	// board is what the components are being built for. Biscuit until something says otherwise:
-	// every device in the field is one, and a registry nobody told is a test or an offline tool.
+	// board is what the components are being built for, and told whether anything has said.
 	board board.Board
+	told  bool
 }
 
 type entry struct {
@@ -63,20 +63,29 @@ func Needs(c board.Cap) Option { return func(e *entry) { e.needs |= c } }
 
 // New is an empty registry. There is a process-wide one for components to register into; this is
 // for tests, which want their own.
-func New() *Registry { return &Registry{board: board.Biscuit} }
+func New() *Registry { return &Registry{} }
 
 // Use says which board the components are being built for. It has to be called before anything
 // walks the registry, since the first walk is what builds them.
 func (r *Registry) Use(b board.Board) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.board = b
+	r.board, r.told = b, true
 }
 
-// Board is which device the components are being built for.
+// Board is which device this is, asking the device itself when nobody has said. The offline tools
+// never call Use.
 func (r *Registry) Board() board.Board {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.onBoard()
+}
+
+// onBoard is Board with the lock already held.
+func (r *Registry) onBoard() board.Board {
+	if !r.told {
+		r.board, r.told = board.Detect(), true
+	}
 	return r.board
 }
 
@@ -217,7 +226,7 @@ func (o oneshot) Close() error {
 // sorted is the entries in the order everything walks them.
 func (r *Registry) sorted() []*entry {
 	r.mu.Lock()
-	on := r.board
+	on := r.onBoard()
 	out := slices.DeleteFunc(slices.Clone(r.entries), func(e *entry) bool {
 		return e.needs&^on.Caps != 0
 	})
@@ -242,4 +251,31 @@ func (r *Registry) sorted() []*entry {
 		return cmp.Compare(a.c.Name(), b.c.Name())
 	})
 	return out
+}
+
+// Progress is what the components say about coming up, in the order they were brought up. Only
+// those that implement Startup have anything to say.
+func (r *Registry) Progress() []Progress {
+	var out []Progress
+	for _, e := range r.sorted() {
+		s, ok := e.c.(Startup)
+		if !ok {
+			continue
+		}
+
+		p := s.Startup()
+		p.Name = e.c.Name()
+		out = append(out, p)
+	}
+	return out
+}
+
+// Ready reports whether everything the boot screen waits for is up.
+func (r *Registry) Ready() bool {
+	for _, p := range r.Progress() {
+		if !p.Settled() {
+			return false
+		}
+	}
+	return true
 }

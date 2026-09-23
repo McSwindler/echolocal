@@ -60,12 +60,6 @@ func newStatusCmd() *cobra.Command {
 					styleDetail.Render(s.Service+" is Amazon's binary"))
 			}
 
-			if s.HaveBackup {
-				row("backup", styleDone.Render("present")+" "+styleDetail.Render(s.Backup))
-			} else {
-				row("backup", styleSkip.Render("none"))
-			}
-
 			state := s.ServiceState
 			if state == "" {
 				state = "unknown"

@@ -10,11 +10,7 @@
 // second place for them to be wrong.
 package board
 
-import (
-	"strings"
-
-	"github.com/ygelfand/echolocal/internal/layout"
-)
+import "strings"
 
 // Cap is hardware a board either has or does not, where the difference decides whether a component
 // exists at all rather than how one behaves.
@@ -30,6 +26,9 @@ const (
 
 	// Panel is a screen reached through the kernel framebuffer.
 	Panel
+
+	// Wifi is a board where nothing brings the radio up on its own.
+	Wifi
 )
 
 // Board is a model of device.
@@ -85,10 +84,6 @@ type Board struct {
 
 // Has reports whether the board carries a capability.
 func (b Board) Has(c Cap) bool { return b.Caps&c != 0 }
-
-// Backup is where the stock service binary is kept once echod has taken its place. It is moved
-// there once and never again, so it stays the original whatever happens afterwards.
-func (b Board) Backup() string { return b.Service + layout.BackupSuffix }
 
 // String is the board in logs and errors.
 func (b Board) String() string {

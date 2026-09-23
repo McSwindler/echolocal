@@ -19,6 +19,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/hardware/indicate"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
 )
@@ -90,8 +91,7 @@ func Failure() {
 	if name == "" {
 		return
 	}
-	led.Get().Claim(led.PriorityTrouble).ShowFor(
-		led.Content{Effect: name, Base: failureColor}, failureFlash)
+	indicate.Get().Claim(indicate.PriorityTrouble).ShowFor(name, failureColor, failureFlash)
 }
 
 // Cancelled is a request dropped on purpose, which is neither a failure nor an answer. It only

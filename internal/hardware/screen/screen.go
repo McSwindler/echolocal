@@ -151,6 +151,10 @@ func (p *Panel) Close() error {
 // Pages is how many buffers can be panned between. One means every draw is visible as it happens.
 func (p *Panel) Pages() int { return p.pages }
 
+// Viewed turns a panel position into the coordinates drawing uses, so a touch lands where the pixel
+// was drawn.
+func (p *Panel) Viewed(px, py int) (x, y int) { return p.rot.Viewed(px, py, p.fbW, p.fbH) }
+
 // Set paints one viewed pixel into the page being drawn. Anything outside the panel is dropped, so
 // a caller may describe more than fits.
 func (p *Panel) Set(x, y int, c Color) {
@@ -164,10 +168,12 @@ func (p *Panel) Set(x, y int, c Color) {
 		return
 	}
 
-	// BGRA, the little-endian uint32 0xAARRGGBB this controller advertises.
-	p.mem[at+0] = c.B
+	// RGBA in memory. The driver advertises r16 g8 b0, which on a little-endian machine would put
+	// blue first, but a red patch comes out blue that way — so this is what the panel shows, not
+	// what it says.
+	p.mem[at+0] = c.R
 	p.mem[at+1] = c.G
-	p.mem[at+2] = c.R
+	p.mem[at+2] = c.B
 	p.mem[at+3] = c.A
 }
 
@@ -178,9 +184,9 @@ func (p *Panel) Fill(c Color) {
 	// One row, then copied out: far faster than writing each pixel.
 	row := page[:p.fbW*4]
 	for x := range p.fbW {
-		row[x*4+0] = c.B
+		row[x*4+0] = c.R
 		row[x*4+1] = c.G
-		row[x*4+2] = c.R
+		row[x*4+2] = c.B
 		row[x*4+3] = c.A
 	}
 	for y := 1; y < p.fbH; y++ {

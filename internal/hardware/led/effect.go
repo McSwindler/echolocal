@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/ygelfand/echolocal/internal/hardware/indicate"
 )
 
 // FrameInterval paces animations at 25 fps. Each frame is one 36-byte i2c write, which the
@@ -48,15 +50,9 @@ func (k Kinds) Has(want Kinds) bool { return k&want != 0 }
 
 // Room is what an effect that watches the room can ask about it, read every frame rather than passed as
 // numbers: what it shows is whatever is true at the moment it draws.
-type Room struct {
-	// Level is how loud it is now, 0 for quiet to 1 for someone talking close by, measured against the
-	// room's own noise floor.
-	Level func() float64
-
-	// Facing is where the loudest sound is, as a fraction clockwise round the ring from segment 0, and
-	// whether that is known: it takes a frame of asking, and a room with nothing in it has no answer.
-	Facing func() (float64, bool)
-}
+// Room is indicate's: what the room sounds like is the same question whatever shows the answer. On
+// the ring, Facing is the fraction clockwise from segment 0.
+type Room = indicate.Room
 
 // Effect is one animation the ring can run: a motion paired with the colours it runs in. Keeping
 // them separate is what lets one motion appear both in the ring's own colour and in colours of its

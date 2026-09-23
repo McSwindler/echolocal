@@ -39,6 +39,7 @@ type Config struct {
 	Media      Media      `json:"media"`
 	Sendspin   Sendspin   `json:"sendspin"`
 	Screen     Screen     `json:"screen"`
+	Network    Network    `json:"network"`
 }
 
 // Defaults is a device nobody has set anything on.
@@ -95,6 +96,7 @@ func (w Writer) Diag() DiagWriter             { return DiagWriter(w) }
 func (w Writer) Media() MediaWriter           { return MediaWriter(w) }
 func (w Writer) Sendspin() SendspinWriter     { return SendspinWriter(w) }
 func (w Writer) Screen() ScreenWriter         { return ScreenWriter(w) }
+func (w Writer) Network() NetworkWriter       { return NetworkWriter(w) }
 
 // Wake names one slot, since every wake word setting belongs to one.
 func (w Writer) Wake(slot int) WakeWriter { return WakeWriter{st: w.st, slot: slot} }

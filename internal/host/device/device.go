@@ -244,7 +244,7 @@ func (d *Device) Wait(ctx context.Context, states ...string) error {
 				if s != d.serial {
 					continue
 				}
-				if _, err := d.Shell("true"); err == nil {
+				if _, _, err := d.shell("true"); err == nil {
 					return nil
 				}
 			}
@@ -323,7 +323,9 @@ func (d *Device) ShellCode(cmd string) (string, int, error) {
 // shell appends its own exit-status marker rather than trusting adb to propagate one, which older
 // adb does not.
 func (d *Device) shell(cmd string) (string, int, error) {
-	raw, err := d.run(context.Background(), "shell", cmd+"; echo "+rcMarker+"$?")
+	raw, err := d.withRetry(func() (string, error) {
+		return d.run(context.Background(), "shell", cmd+"; echo "+rcMarker+"$?")
+	})
 	if err != nil {
 		return "", 0, fmt.Errorf("device: running %q: %w", cmd, err)
 	}
@@ -379,13 +381,14 @@ func (d *Device) IsSymlink(path string) (bool, error) {
 // ReadFile reads a file into memory through exec-out, which is the only shell that does not translate
 // line endings. Reading a boot partition through `adb shell cat` corrupts it silently.
 func (d *Device) ReadFile(path string) ([]byte, error) {
-	cmd := d.command(context.Background(), "exec-out", "cat "+quote(path))
-
-	out, err := cmd.Output()
+	out, err := d.withRetry(func() (string, error) {
+		b, err := d.command(context.Background(), "exec-out", "cat "+quote(path)).Output()
+		return string(b), err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("device: reading %s: %w", path, err)
 	}
-	return out, nil
+	return []byte(out), nil
 }
 
 // PullFile copies a file off the device.
@@ -420,7 +423,9 @@ func (d *Device) WriteFile(remote string, data []byte, mode os.FileMode) error {
 // other, and overwriting one yields 0644. The chmod is what actually sets it, and without it a
 // re-install leaves a binary init cannot exec.
 func (d *Device) PushFile(local, remote string, mode os.FileMode) error {
-	if _, err := d.run(context.Background(), "push", local, remote); err != nil {
+	if _, err := d.withRetry(func() (string, error) {
+		return d.run(context.Background(), "push", local, remote)
+	}); err != nil {
 		return fmt.Errorf("device: pushing %s: %w", remote, err)
 	}
 
@@ -494,6 +499,46 @@ func (d *Device) command(ctx context.Context, args ...string) *exec.Cmd {
 func (d *Device) run(ctx context.Context, args ...string) (string, error) {
 	return output(d.command(ctx, args...))
 }
+
+// Dropped reports whether adb lost the device, which it exits 255 for whatever the command was.
+func Dropped(err error) bool {
+	var exit *exec.ExitError
+	return errors.As(err, &exit) && exit.ExitCode() == 255
+}
+
+// withRetry runs a command again once if the transport went away rather than the command failing.
+func (d *Device) withRetry(do func() (string, error)) (string, error) {
+	out, err := do()
+	if !Dropped(err) {
+		return out, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), backTimeout)
+	defer cancel()
+
+	if err := d.back(ctx); err != nil {
+		return out, err
+	}
+	return do()
+}
+
+func (d *Device) back(ctx context.Context) error {
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	for {
+		if _, _, err := d.shell("true"); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("device: %s went away and did not come back: %w", d.serial, ctx.Err())
+		case <-tick.C:
+		}
+	}
+}
+
+const backTimeout = 5 * time.Second
 
 func run(ctx context.Context, args ...string) (string, error) {
 	return output(exec.CommandContext(ctx, Binary, args...))

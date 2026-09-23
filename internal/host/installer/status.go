@@ -26,11 +26,9 @@ type State struct {
 	// Reported so that whatever displays this does not have to work out the board a second time.
 	Board   board.Board
 	Service string
-	Backup  string
 
 	Installed  bool
 	LinkTarget string
-	HaveBackup bool
 	Version    string
 
 	ServiceState string
@@ -62,7 +60,7 @@ func ReadState(d *device.Device) (State, error) {
 	if b, ok := board.For(s.Product); ok {
 		s.Board = b
 	}
-	s.Service, s.Backup = s.Board.Service, s.Board.Backup()
+	s.Service = s.Board.Service
 
 	link, err := d.IsSymlink(s.Service)
 	if err != nil {
@@ -75,10 +73,6 @@ func ReadState(d *device.Device) (State, error) {
 		}
 		s.LinkTarget = strings.TrimSpace(target)
 		s.Installed = s.LinkTarget == layout.Binary
-	}
-
-	if s.HaveBackup, err = d.Exists(s.Backup); err != nil {
-		return s, err
 	}
 
 	if s.Installed {

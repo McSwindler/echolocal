@@ -69,3 +69,23 @@ func TestTheViewedOriginIsACorner(t *testing.T) {
 		}
 	}
 }
+
+// A touch has to land where the pixel was drawn, so Viewed has to undo Panel exactly.
+func TestViewedUndoesPanel(t *testing.T) {
+	const w, h = 4, 6
+
+	for _, o := range []Orientation{Rotate0, Rotate90, Rotate180, Rotate270} {
+		vw, vh := o.Size(w, h)
+
+		for y := range vh {
+			for x := range vw {
+				px, py := o.Panel(x, y, w, h)
+				gx, gy := o.Viewed(px, py, w, h)
+
+				if gx != x || gy != y {
+					t.Fatalf("%s: (%d,%d) -> panel (%d,%d) -> (%d,%d)", o, x, y, px, py, gx, gy)
+				}
+			}
+		}
+	}
+}

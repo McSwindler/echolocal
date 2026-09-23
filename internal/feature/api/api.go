@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -41,6 +42,10 @@ type API struct {
 
 	reconnect chan struct{}
 	announced sync.Once
+
+	// listening is set once the port is open, which is what the boot screen waits for: a device
+	// Home Assistant cannot reach is not up yet however much of it is running.
+	listening atomic.Bool
 }
 
 var (
@@ -58,6 +63,13 @@ func Get() *API {
 }
 
 func (a *API) Name() string { return "api" }
+
+func (a *API) Startup() component.Progress {
+	if !a.listening.Load() {
+		return component.Progress{Doing: "opening the port"}
+	}
+	return component.Progress{Done: true}
+}
 
 // Start builds the server. Not the constructor, because what the server serves is the registry, and
 // the registry is only complete once every package's init has run.
@@ -147,6 +159,8 @@ func (a *API) Run(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("api: listen %s: %w", a.srv.Addr, err)
 		}
+
+		a.listening.Store(true)
 
 		a.announced.Do(func() {
 			safe.Go("mdns", func() { a.advertise(ctx, ln.Addr().(*net.TCPAddr).Port) })

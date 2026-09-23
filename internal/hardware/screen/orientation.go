@@ -40,6 +40,20 @@ func (o Orientation) Size(fbW, fbH int) (w, h int) {
 	return fbW, fbH
 }
 
+// Viewed turns a panel position back into a viewed one, which is how a touch lands where it was
+// drawn. The inverse of Panel.
+func (o Orientation) Viewed(px, py, fbW, fbH int) (x, y int) {
+	switch o {
+	case Rotate90:
+		return fbH - 1 - py, px
+	case Rotate180:
+		return fbW - 1 - px, fbH - 1 - py
+	case Rotate270:
+		return py, fbW - 1 - px
+	}
+	return px, py
+}
+
 // Panel maps a viewed pixel to the framebuffer pixel that carries it. x and y are in viewed
 // coordinates, whose extent is Size(fbW, fbH).
 func (o Orientation) Panel(x, y, fbW, fbH int) (px, py int) {

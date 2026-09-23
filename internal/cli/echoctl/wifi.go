@@ -14,7 +14,6 @@ import (
 	"github.com/ygelfand/echolocal/internal/host/device"
 )
 
-// joinTimeout covers association and DHCP.
 const joinTimeout = 45 * time.Second
 
 func newWifiCmd() *cobra.Command {

@@ -9,60 +9,25 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/hardware/indicate"
 	"github.com/ygelfand/echolocal/internal/service"
 )
 
-// Priority is how the ring resolves being asked for two things at once. Higher wins, and when a
-// claim goes away whatever is under it comes back on its own.
-//
-// This exists because the ring has one surface and several things with a legitimate claim on it: the
-// boot animation, a conversation, a volume change, a failure, and whatever Home Assistant set the
-// light to. Without an order they overwrite each other in whatever sequence the events happened to
-// arrive, and a failure indication ends up cancelled by the teardown of the thing that failed.
-type Priority int
+// The ring's priorities are indicate's: the ring is one surface among those a board might have, and
+// a feature claims at a priority without knowing which it got.
+type Priority = indicate.Priority
 
 const (
-	// PriorityBase is the light entity: what the ring shows when nothing is happening.
-	PriorityBase Priority = iota
-
-	// PriorityRoom is the ring reacting to the room, if that has been chosen. It sits over the light's
-	// resting colour because it is a resting appearance too and the user asked for this one, and under
-	// everything else because it is the least urgent thing the ring can be doing: it says nothing has
-	// happened, only that the room is here.
-	PriorityRoom
-
-	// PriorityMute is a microphone that has been cut, if the user asked to see it. Over the room and
-	// the light, because it says the device cannot hear, which outranks anything it might show about a
-	// room it is not listening to.
-	PriorityMute
-
-	// PriorityTimer is a timer counting down.
-	PriorityTimer
-
-	// PriorityBusy is the device working on something the user asked for and is waiting on, such as a
-	// newly chosen wake word being fetched and warmed up. Over mute, because the mute button has a
-	// light of its own and so says the microphones are cut whatever the ring is doing, and under a
-	// conversation, because by then the device is answering rather than getting ready to.
-	PriorityBusy
-
-	// PriorityTurn is a conversation, which holds the ring from the wake word to the end of the reply.
-	PriorityTurn
-
-	// PriorityAlarm is a timer that has finished and is ringing, which outranks the turn somebody
-	// starts to tell it to stop.
-	PriorityAlarm
-
-	// PriorityNotice is a brief acknowledgement of something the user just did, like a volume change.
-	// It outranks a conversation because it is a direct response to a button they are holding.
-	PriorityNotice
-
-	// PriorityTrouble is a failure. It outranks a conversation so that ending the turn that failed
-	// cannot take the indication away with it.
-	PriorityTrouble
-
-	// PriorityBoot is the start-up animation, which owns the ring until the device is actually able
-	// to answer. Nothing else may write while it is up.
-	PriorityBoot
+	PriorityBase    = indicate.PriorityBase
+	PriorityRoom    = indicate.PriorityRoom
+	PriorityMute    = indicate.PriorityMute
+	PriorityTimer   = indicate.PriorityTimer
+	PriorityBusy    = indicate.PriorityBusy
+	PriorityTurn    = indicate.PriorityTurn
+	PriorityAlarm   = indicate.PriorityAlarm
+	PriorityNotice  = indicate.PriorityNotice
+	PriorityTrouble = indicate.PriorityTrouble
+	PriorityBoot    = indicate.PriorityBoot
 )
 
 // Content is what a claim wants shown. An empty Content shows nothing, which is how a claim can
@@ -445,9 +410,14 @@ type Claim struct {
 // Show puts something on the ring and leaves it there.
 func (c *Claim) Show(content Content) { c.set(content, time.Time{}) }
 
-// ShowFor puts something on the ring for a while, after which the claim releases itself and whatever
-// is underneath comes back.
-func (c *Claim) ShowFor(content Content, d time.Duration) {
+// ShowFor plays a motion for a while, after which the claim releases itself and whatever is
+// underneath comes back.
+func (c *Claim) ShowFor(effect string, base Color, d time.Duration) {
+	c.ShowContentFor(Content{Effect: effect, Base: base}, d)
+}
+
+// ShowContentFor is ShowFor for something only the ring can show, such as a still frame.
+func (c *Claim) ShowContentFor(content Content, d time.Duration) {
 	c.set(content, time.Now().Add(d))
 }
 
@@ -455,7 +425,9 @@ func (c *Claim) ShowFor(content Content, d time.Duration) {
 func (c *Claim) Paint(frame []Color) { c.Show(Content{Frame: frame}) }
 
 // PaintFor shows a still frame briefly.
-func (c *Claim) PaintFor(frame []Color, d time.Duration) { c.ShowFor(Content{Frame: frame}, d) }
+func (c *Claim) PaintFor(frame []Color, d time.Duration) {
+	c.ShowContentFor(Content{Frame: frame}, d)
+}
 
 // Play runs a named effect.
 func (c *Claim) Play(effect string, base Color) { c.Show(Content{Effect: effect, Base: base}) }
@@ -538,4 +510,20 @@ func (c *Claim) done() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return !c.expires.IsZero() && !time.Now().Before(c.expires)
+}
+
+// surface is the ring as something a feature can claim without naming it. An adapter rather than
+// the driver itself, because Claim hands back the ring's own type — the one carrying the still
+// frames and animations a screen has no equivalent for.
+type surface struct{ d *Driver }
+
+var _ indicate.Surface = surface{}
+var _ indicate.Claim = (*Claim)(nil)
+
+func (s surface) Claim(p indicate.Priority) indicate.Claim { return s.d.Claim(p) }
+func (s surface) HoldOnStop(c indicate.Color)              { s.d.HoldOnStop(c) }
+func (s surface) Present() bool                            { return s.d.Present() }
+
+func init() {
+	indicate.Register(func() indicate.Surface { return surface{Get()} })
 }

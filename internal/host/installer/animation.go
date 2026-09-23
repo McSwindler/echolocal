@@ -1,7 +1,6 @@
 package installer
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/ygelfand/echolocal/internal/layout"
@@ -24,7 +23,7 @@ import (
 // where a failed update is undone — and echod rewrites these itself when they fall behind, so two
 // definitions would drift and the rollback is not a thing to be wrong about.
 
-// disableBootAnimation replaces both animation scripts, keeping the originals alongside.
+// disableBootAnimation replaces both animation scripts.
 func disableBootAnimation(r *run) (string, bool, error) {
 	hooks := r.board().BootHooks
 	if len(hooks) == 0 {
@@ -57,17 +56,6 @@ func stubScript(r *run, path string) (bool, error) {
 	current, err := r.d.ReadFile(path)
 	if err == nil && string(current) == want {
 		return false, nil
-	}
-
-	backup := path + layout.BackupSuffix
-	saved, err := r.d.Exists(backup)
-	if err != nil {
-		return false, err
-	}
-	if !saved {
-		if _, err := r.d.Shell(fmt.Sprintf("mv %s %s", path, backup)); err != nil {
-			return false, err
-		}
 	}
 
 	if err := r.d.WriteFile(path, []byte(want), 0o755); err != nil {

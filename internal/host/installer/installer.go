@@ -81,11 +81,11 @@ var steps = []step{
 	{"hide Amazon packages", hidePackages},
 	{"clear the saved usb config", clearUSBConfig},
 	{"install echod", installBinary},
-	{"back up the stock service", backupService},
 	{"run echod as root", serviceAsRoot},
 	{"take over the service", takeOverService},
 	{"disable the boot animation", disableBootAnimation},
 	{"open the API port", installFirewallHook},
+	{"bring up wifi", bringUpWifi},
 	{"stop service", stopService},
 	{"remount /system ro", remountRO},
 	{"start echod", startService},
@@ -118,8 +118,7 @@ type run struct {
 }
 
 // Install puts echod on a device that already has root. It is safe to re-run: every step either
-// checks the state it creates or is harmless to repeat, and the stock binary is backed up only once,
-// so a second run cannot overwrite it.
+// checks the state it creates or is harmless to repeat.
 //
 // It reports whether anything changed that the device will only act on when it next starts, which is
 // the only reason to offer a reboot. A re-run that just replaced the binary reports false: echod is
@@ -247,24 +246,6 @@ func clearTrial(r *run) error {
 	return err
 }
 
-// backupService keeps Amazon's binary. Moving it a second time would move our own symlink
-// onto the backup and lose the original for good, so this only ever runs once.
-func backupService(r *run) (string, bool, error) {
-	on := r.board()
-
-	have, err := r.d.Exists(on.Backup())
-	if err != nil {
-		return "", false, err
-	}
-	if have {
-		return "already saved at " + on.Backup(), true, nil
-	}
-	if _, err := r.d.Shell(fmt.Sprintf("mv %s %s", on.Service, on.Backup())); err != nil {
-		return "", false, err
-	}
-	return on.Backup(), false, nil
-}
-
 // takeOverService points init's ledcontroller at echod. Already pointing there is left alone rather
 // than relinked: an identical write reported as work is what made every re-run look like it had
 // changed something, and this is the step whose effect a reboot actually settles — init starts what the
@@ -340,6 +321,9 @@ func startService(r *run) (string, bool, error) {
 		time.Sleep(200 * time.Millisecond)
 	}
 
+	// init refuses a service whose block it has not read, which is every block this run wrote, and
+	// says so only in its own log. The reboot is what hands it over.
 	state, _ := r.d.Getprop("init.svc." + name)
-	return "", false, fmt.Errorf("echod did not report a start within 10s (init.svc.%s=%s)", name, state)
+	r.reboot = true
+	return fmt.Sprintf("needs a reboot (init.svc.%s=%s)", name, state), true, nil
 }

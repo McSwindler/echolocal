@@ -5,24 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/ygelfand/echolocal/internal/host/device"
 	"github.com/ygelfand/echolocal/internal/host/installer"
 )
-
-// payload resolves what to install: what the build ships, or a file when one was named. A build
-// without a payload and no flag is an error rather than a silent nothing.
-func payload(shipped []byte, path, what string) ([]byte, string, error) {
-	if path != "" {
-		data, err := os.ReadFile(path)
-		return data, path, err
-	}
-	if len(shipped) == 0 {
-		return nil, "", fmt.Errorf("this build ships no %s: build with `make dist`, or pass its path", what)
-	}
-	return shipped, "shipped with echoctl", nil
-}
 
 // approveFlash asks before the progress display starts, since that owns the terminal.
 //

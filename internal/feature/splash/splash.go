@@ -1,11 +1,12 @@
-// Package splash is what the panel shows while the device is coming up.
+// Package splash is what the panel shows while the device is coming up: the mark, then what it is
+// still waiting for.
 package splash
 
 import (
 	"context"
-	"image"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
@@ -21,9 +22,20 @@ func init() {
 	component.Register(component.Hardware, Get, component.Order(5), component.Needs(board.Panel))
 }
 
-type Splash struct {
-	panel *screen.Panel
-}
+const (
+	// logoFor is how long the mark is up before the screen starts saying what it is waiting for.
+	// Long enough to be a greeting, short enough that a stuck device says so quickly.
+	logoFor = 2 * time.Second
+
+	// listFor is the least the list stays up once it has appeared, so a device that comes up in a
+	// second does not flash it past unread.
+	listFor = 3 * time.Second
+
+	// look is how often the screen is reconsidered.
+	look = 250 * time.Millisecond
+)
+
+type Splash struct{}
 
 var (
 	once   sync.Once
@@ -34,85 +46,100 @@ func Get() *Splash { once.Do(func() { shared = &Splash{} }); return shared }
 
 func (s *Splash) Name() string { return "splash" }
 
+// Start puts the mark up, full screen, before anything else has run.
 func (s *Splash) Start(context.Context) error {
-	p, err := screen.Open(screen.DefaultPath, screen.Orientation(component.Board().PanelRotation))
-	if err != nil {
-		// A device that cannot draw still answers, so this is said rather than fatal.
-		slog.Error("the panel would not open", "err", err)
+	p := screen.Get().Panel()
+	if p == nil {
 		return nil
 	}
-	s.panel = p
-	slog.Info("panel", "info", p.Info())
 
-	if err := s.show(); err != nil {
+	t := theme.Get().Current()
+	bg := colour(t.Background)
+
+	p.Fill(bg)
+	p.Draw(ui.Mark(t.Dark), p.Bounds(), bg)
+
+	if err := p.Flip(); err != nil {
 		slog.Error("drawing the splash failed", "err", err)
 	}
 	return nil
 }
 
-// Panel is the screen, or nil where there is none. Whatever draws next takes it from here: the
-// mapping and the page being drawn into are per handle, and two handles would fight.
-func (s *Splash) Panel() *screen.Panel { return s.panel }
-
-func (s *Splash) Close() error {
-	if s.panel == nil {
+// Run shows the mark for a moment, then what the device is still waiting for, and finishes once
+// everything is up.
+func (s *Splash) Run(ctx context.Context) error {
+	p := screen.Get().Panel()
+	if p == nil {
+		<-ctx.Done()
 		return nil
 	}
-	return s.panel.Close()
+
+	if !wait(ctx, logoFor) {
+		return nil
+	}
+
+	t := time.NewTicker(look)
+	defer t.Stop()
+
+	// said starts as something no summary can be, so the first pass always draws.
+	said := "\x00"
+	appeared := time.Now()
+
+	draw := func() {
+		progress := component.Default().Progress()
+
+		// Redrawn only when something changed, since the panel is written pixel by pixel.
+		now := summary(progress)
+		if now == said {
+			return
+		}
+		said = now
+
+		drawBoot(p, theme.Get().Current(), progress)
+		if err := p.Flip(); err != nil {
+			slog.Error("drawing the boot screen failed", "err", err)
+		}
+		slog.Info("coming up", "waiting", now)
+	}
+
+	for !component.Default().Ready() || time.Since(appeared) < listFor {
+		draw()
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+	}
+
+	// What settled last changed after the final pass, so the panel is still showing it waiting.
+	draw()
+
+	slog.Info("ready")
+	return nil
 }
 
-func (s *Splash) show() error {
-	t := theme.Get().Current()
-	bg := colour(t.Background)
+// summary is what the screen currently says, for deciding whether to draw it again.
+func summary(progress []component.Progress) string {
+	var s string
+	for _, p := range progress {
+		if !p.Settled() {
+			s += p.Name + ":" + p.Doing + " "
+		}
+	}
+	return s
+}
 
-	s.panel.Fill(bg)
-	draw(s.panel, ui.Mark(t.Dark), bg)
-	return s.panel.Flip()
+func wait(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 func colour(c uitheme.Color) screen.Color { return screen.Opaque(c.R, c.G, c.B) }
-
-// draw puts the artwork in the middle of the panel, as large as fits whole. Nearest neighbour: the
-// artwork is already close to the size it is shown at.
-func draw(p *screen.Panel, img image.Image, bg screen.Color) {
-	b := img.Bounds()
-	if b.Empty() {
-		return
-	}
-
-	scale := min(float64(p.Width)/float64(b.Dx()), float64(p.Height)/float64(b.Dy()))
-	w := int(float64(b.Dx()) * scale)
-	h := int(float64(b.Dy()) * scale)
-
-	ox := (p.Width - w) / 2
-	oy := (p.Height - h) / 2
-
-	for y := range h {
-		sy := b.Min.Y + y*b.Dy()/h
-		for x := range w {
-			sx := b.Min.X + x*b.Dx()/w
-
-			c := screen.From(img.At(sx, sy))
-			if c.A == 0 {
-				continue
-			}
-			if c.A < 0xFF {
-				c = blend(c, bg)
-			}
-			p.Set(ox+x, oy+y, c)
-		}
-	}
-}
-
-// blend puts a partly transparent pixel over the background. src is premultiplied, as image.RGBA
-// stores it, so the source term is already scaled.
-func blend(src, dst screen.Color) screen.Color {
-	inv := 255 - int(src.A)
-
-	return screen.Color{
-		R: byte(int(src.R) + int(dst.R)*inv/255),
-		G: byte(int(src.G) + int(dst.G)*inv/255),
-		B: byte(int(src.B) + int(dst.B)*inv/255),
-		A: 0xFF,
-	}
-}

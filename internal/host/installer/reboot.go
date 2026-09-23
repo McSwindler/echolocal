@@ -41,7 +41,11 @@ func awaitAndroid(r *run) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(r.ctx, androidTimeout)
 	defer cancel()
 
-	if err := r.d.WaitBooted(ctx); err != nil {
+	wait := r.d.WaitBooted
+	if !r.board().SignalsBoot {
+		wait = r.d.WaitRooted
+	}
+	if err := wait(ctx); err != nil {
 		return "", false, err
 	}
 

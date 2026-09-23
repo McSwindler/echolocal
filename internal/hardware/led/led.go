@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/ygelfand/echolocal/internal/hardware/indicate"
 )
 
 // DefaultPath is the is31fl3236 i2c device directory.
@@ -33,8 +35,9 @@ const Segments = 12
 //   - Increasing segment index runs clockwise, 30 degrees per segment.
 //   - Each channel is a linear 0-255 brightness, 0 being dark.
 
-// Color is one segment's color.
-type Color struct{ R, G, B byte }
+// Color is one segment's colour, which is indicate's: a feature asks for a colour without knowing
+// what shows it.
+type Color = indicate.Color
 
 // SetSegments writes all 12 segments at once.
 func (r *Ring) SetSegments(c []Color) error {

@@ -36,6 +36,7 @@ func (c *Control) tree() *cobra.Command {
 	root.CompletionOptions.DisableDefaultCmd = true
 
 	root.AddCommand(telling()...)
+	root.AddCommand(showing()...)
 	return root
 }
 

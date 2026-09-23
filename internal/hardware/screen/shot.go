@@ -31,12 +31,12 @@ func (p *Panel) Shot() (*image.RGBA, error) {
 				continue
 			}
 
-			// BGRA in memory. Alpha is what the controller was given and says nothing about what
-			// is visible, so a capture is opaque.
+			// RGBA in memory, as Set writes it. Alpha is what the controller was given and says
+			// nothing about what is visible, so a capture is opaque.
 			out := img.PixOffset(x, y)
-			img.Pix[out+0] = p.mem[at+2]
+			img.Pix[out+0] = p.mem[at+0]
 			img.Pix[out+1] = p.mem[at+1]
-			img.Pix[out+2] = p.mem[at+0]
+			img.Pix[out+2] = p.mem[at+2]
 			img.Pix[out+3] = 0xFF
 		}
 	}

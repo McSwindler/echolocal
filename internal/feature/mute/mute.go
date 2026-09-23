@@ -18,6 +18,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/buttons"
+	"github.com/ygelfand/echolocal/internal/hardware/indicate"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/privacy"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
@@ -44,11 +45,12 @@ type Mute struct {
 	line       privacy.Mute
 	led        privacy.LED
 
-	// ring is the animation to show while the microphones are cut, and claim is where it goes. The
-	// select lives here rather than with the other settings because choosing one has to take effect
-	// immediately: being muted has no next occurrence to wait for, it is already happening.
+	// ring is the animation to show while the microphones are cut, and claim is where it goes —
+	// whichever surface this board has. The select lives here rather than with the other settings
+	// because choosing one has to take effect immediately: being muted has no next occurrence to
+	// wait for, it is already happening.
 	ring  *esphome.Select
-	claim *led.Claim
+	claim indicate.Claim
 }
 
 var (
@@ -71,7 +73,7 @@ func build() *Mute {
 				Icon:     "mdi:microphone-off",
 			},
 		},
-		claim: led.Get().Claim(led.PriorityMute),
+		claim: indicate.Get().Claim(indicate.PriorityMute),
 		ring: &esphome.Select{
 			Base: esphome.Base{
 				ObjectID: "ring_muted",
