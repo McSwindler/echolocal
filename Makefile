@@ -52,16 +52,28 @@ DEVICE_BIN := $(BUILD_DIR)/echod$(if $(BOARD),-$(BOARD))-$(DOT_ARCH)
 ADB ?= adb
 DEVICE_TMP := /data/local/tmp
 
+# DEVICE names which attached device the device targets act on, when there is more than one.
+DEVICE ?=
+ifneq ($(DEVICE),)
+ADB := $(ADB) -s $(DEVICE)
+SERIAL := --serial $(DEVICE)
+endif
+
+# What the attached device is, as shell assignments: codename, device and service. echoctl reads the
+# board table, so this is not a second copy of it.
+BOARD_SH = go run ./cmd/echoctl board --sh $(SERIAL)
+
+# The device targets build with BOARD only for a board with packages of its own. Everywhere else the
+# plain binary is what the manifest serves, and installing another would be debugging the wrong one.
+
 # echod lives under /system/app because that tree is labelled u:object_r:system_file:s0,
 # the label that leaves an init-started service in init's own domain rather than the narrow
 # per-service domain its stock *_exec label would select.
 #
-# It is installed as Amazon's ledcontroller service: that kills the spinning ring by removing
-# its driver, and init then starts echod from on post-fs-data and restarts it if it exits.
+# It is installed as one of Amazon's own services — which one is the board's, see internal/board —
+# so init starts echod from on post-fs-data and restarts it if it exits.
 ECHOD_DIR := /system/app/echod
 STATE_DIR := /data/misc/echolocal
-LEDD := /system/bin/ledcontroller
-LEDD_LABEL_ORIG := u:object_r:ledd_exec:s0
 
 ##@ Development
 
@@ -137,6 +149,19 @@ check: fmt vet lint test ## Format, vet, lint and test
 
 ##@ Device (echod)
 
+.PHONY: device
+device: ## Say which device the device targets would write to, and refuse an unknown one
+	@n=$$($(ADB) devices | grep -c "device$$"); \
+	if [ "$$n" -eq 0 ]; then echo "no device attached"; exit 1; fi; \
+	if [ "$$n" -gt 1 ] && [ -z "$(DEVICE)" ]; then \
+		echo "$$n devices attached, so name one:"; \
+		$(ADB) devices | grep "device$$" | sed 's/^/  make DEVICE=/;s/\tdevice$$//'; \
+		exit 1; \
+	fi
+	@$(BOARD_SH) >/dev/null || { \
+		echo "these targets remount /system, so an unrecognised device is refused"; exit 1; }
+	@go run ./cmd/echoctl board $(SERIAL)
+
 .PHONY: payload
 payload: ## Stage echod for embedding into echoctl
 	@$(MAKE) --no-print-directory build-echod DOT_ARCH=arm
@@ -150,41 +175,48 @@ dist: payload ## Full build: echod, then echoctl carrying it
 	CGO_ENABLED=0 go build -tags payload -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/echoctl ./cmd/echoctl
 
 .PHONY: install-echod
-install-echod: build-echod ## Install echod into /system/app/echod, restarting it if installed
+install-echod: ## Install echod into /system/app/echod, built for whatever board is attached
 # This is a manual copy, not an upgrade, so the trial an update may have left open is cleared with it.
 # Otherwise the restart below looks like a binary that took an update and died without committing, and
 # echod reboots the device to put the old one back — taking this install with it.
-	@$(ADB) shell 'setprop ctl.stop ledcontroller; sleep 1'
-	@$(ADB) remount >/dev/null
-	@$(ADB) shell 'mkdir -p $(ECHOD_DIR) && rm -f $(ECHOD_DIR)/echod.prev $(ECHOD_DIR)/echod.old'
-	@$(ADB) push $(DEVICE_BIN) $(ECHOD_DIR)/echod >/dev/null
-	@$(ADB) shell 'chmod 755 $(ECHOD_DIR)/echod; \
-		rm -f $(STATE_DIR)/updating; setprop echolocal.trial ""; setprop echolocal.rolledback ""; \
-		[ -L $(LEDD) ] && setprop ctl.start ledcontroller; ls -lZ $(ECHOD_DIR)/echod'
+	@$(MAKE) --no-print-directory device
+	@eval "$$($(BOARD_SH))"; \
+		board=$$(echo "$(BOARD_BUILDS)" | tr ' ' '\n' | grep -x "$$codename" || true); \
+		$(MAKE) --no-print-directory build-echod $${board:+BOARD=$$board}; \
+		bin=$(BUILD_DIR)/echod$${board:+-$$board}-$(DOT_ARCH); \
+		$(ADB) shell "setprop ctl.stop $$service; sleep 1"; \
+		$(ADB) remount >/dev/null; \
+		$(ADB) shell 'mkdir -p $(ECHOD_DIR) && rm -f $(ECHOD_DIR)/echod.prev $(ECHOD_DIR)/echod.old'; \
+		$(ADB) push "$$bin" $(ECHOD_DIR)/echod >/dev/null; \
+		$(ADB) shell "chmod 755 $(ECHOD_DIR)/echod; \
+			rm -f $(STATE_DIR)/updating; setprop echolocal.trial ''; setprop echolocal.rolledback ''; \
+			[ -L /system/bin/$$service ] && setprop ctl.start $$service; ls -lZ $(ECHOD_DIR)/echod"
 
 .PHONY: install-service
-install-service: install-echod ## Take over the ledcontroller service so init starts echod
-	@$(ADB) remount >/dev/null
-	@$(ADB) shell '[ -e $(LEDD).orig ] || mv $(LEDD) $(LEDD).orig; \
-		rm -f $(LEDD); ln -s $(ECHOD_DIR)/echod $(LEDD); \
-		ls -lZ $(LEDD) $(LEDD).orig'
+install-service: install-echod ## Take over the board's service so init starts echod
+	@eval "$$($(BOARD_SH))"; svc=/system/bin/$$service; \
+		$(ADB) remount >/dev/null; \
+		$(ADB) shell "[ -e $$svc.orig ] || mv $$svc $$svc.orig; \
+			rm -f $$svc; ln -s $(ECHOD_DIR)/echod $$svc; ls -lZ $$svc $$svc.orig"
 
 .PHONY: uninstall-service
-uninstall-service: ## Restore Amazon's ledcontroller binary and its SELinux label
-	@$(ADB) remount >/dev/null
-	@$(ADB) shell 'rm -f $(LEDD); mv $(LEDD).orig $(LEDD); \
-		chcon $(LEDD_LABEL_ORIG) $(LEDD); ls -lZ $(LEDD)'
+uninstall-service: ## Restore Amazon's binary for the board's service
+	@eval "$$($(BOARD_SH))"; svc=/system/bin/$$service; \
+		$(ADB) remount >/dev/null; \
+		$(ADB) shell "rm -f $$svc; mv $$svc.orig $$svc; chcon $$label $$svc; ls -lZ $$svc"
 
 .PHONY: restart-echod
 restart-echod: ## Restart echod through init (ctl.stop then ctl.start)
-	@$(ADB) shell 'setprop ctl.stop ledcontroller; sleep 1; setprop ctl.start ledcontroller; \
-		sleep 1; echo "init.svc: $$(getprop init.svc.ledcontroller)"'
+	@eval "$$($(BOARD_SH))"; \
+		$(ADB) shell "setprop ctl.stop $$service; sleep 1; setprop ctl.start $$service; \
+			sleep 1; echo \"init.svc: \$$(getprop init.svc.$$service)\""
 
 .PHONY: state
 state: ## Show what echod and init say about echod
-	@$(ADB) shell 'echo "state:   $$(getprop echolocal.state)"; \
-		echo "started: $$(getprop echolocal.started)"; \
-		echo "init.svc: $$(getprop init.svc.ledcontroller)"'
+	@eval "$$($(BOARD_SH))"; \
+		$(ADB) shell "echo \"state:   \$$(getprop echolocal.state)\"; \
+			echo \"started: \$$(getprop echolocal.started)\"; \
+			echo \"init.svc: \$$(getprop init.svc.$$service)\""
 
 .PHONY: logs
 logs: ## Tail echod logs from a connected device
@@ -224,6 +256,15 @@ manifest: build-echod-all ## Write the manifest a device fetches to find this bu
 # tag is being released.
 BOOT_TAG := boot-images
 BOOT_DIR := internal/host/assets/boot
+
+LOGO_SRC := assets
+LOGO_OUT := internal/ui
+
+.PHONY: logos
+logos: ## Rescale the committed artwork into what echod embeds
+	@for n in dark light; do \
+		go run ./cmd/mklogo -in $(LOGO_SRC)/logo_$$n.png -out $(LOGO_OUT)/logo_$$n.png; \
+	done
 
 .PHONY: boot-images
 boot-images: ## Publish the boot images echoctl fetches at install time (run once per board)
