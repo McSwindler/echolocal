@@ -15,12 +15,18 @@ require (
 	github.com/mdlayher/genetlink v1.4.0
 	github.com/mdlayher/netlink v1.9.0
 	github.com/mewkiz/flac v1.0.13
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/pion/opus v0.1.1-0.20260806214105-56fe97fcac80
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
+	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/zserge/microwakeword v0.0.0-20260330234603-bfaf3840114e
+	golang.org/x/exp/shiny v0.0.0-20260908205506-85c1c2202aba
 	golang.org/x/image v0.46.0
 	google.golang.org/protobuf v1.36.11
+	gopkg.in/yaml.v3 v3.0.1
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -74,8 +80,8 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	github.com/ygelfand/go-esphome-device v0.0.6
+	github.com/ygelfand/go-esphome-device v0.0.8
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/sys v0.48.0
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/text v0.42.0
 )
