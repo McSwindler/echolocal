@@ -7,6 +7,7 @@ package screen
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"syscall"
 	"unsafe"
@@ -77,6 +78,9 @@ type Panel struct {
 
 	// Width and Height are what a person sees, at this rotation.
 	Width, Height int
+
+	// clip is what drawing is being confined to, empty for all of it.
+	clip image.Rectangle
 
 	// BlankErr is what the unblank said, so a dark panel is distinguishable from a drawing mistake.
 	BlankErr error
@@ -155,10 +159,21 @@ func (p *Panel) Pages() int { return p.pages }
 // was drawn.
 func (p *Panel) Viewed(px, py int) (x, y int) { return p.rot.Viewed(px, py, p.fbW, p.fbH) }
 
+// Clip confines drawing to a rectangle, which is how a repaint costs the part that changed rather
+// than the screen. An empty rectangle accepts all of it.
+func (p *Panel) Clip(x, y, w, h int) {
+	p.clip = image.Rect(x, y, x+w, y+h)
+}
+
+// clipped reports whether a viewed pixel is being accepted.
+func (p *Panel) clipped(x, y int) bool {
+	return !p.clip.Empty() && !image.Pt(x, y).In(p.clip)
+}
+
 // Set paints one viewed pixel into the page being drawn. Anything outside the panel is dropped, so
 // a caller may describe more than fits.
 func (p *Panel) Set(x, y int, c Color) {
-	if x < 0 || y < 0 || x >= p.Width || y >= p.Height {
+	if x < 0 || y < 0 || x >= p.Width || y >= p.Height || p.clipped(x, y) {
 		return
 	}
 	px, py := p.rot.Panel(x, y, p.fbW, p.fbH)
@@ -175,6 +190,31 @@ func (p *Panel) Set(x, y int, c Color) {
 	p.mem[at+1] = c.G
 	p.mem[at+2] = c.B
 	p.mem[at+3] = c.A
+}
+
+// At reads a viewed pixel back off the page being drawn, which antialiasing needs: the edge of a
+// curve is a blend with whatever is already there.
+func (p *Panel) At(x, y int) Color {
+	if x < 0 || y < 0 || x >= p.Width || y >= p.Height {
+		return Color{}
+	}
+	px, py := p.rot.Panel(x, y, p.fbW, p.fbH)
+
+	at := p.back*p.pageBytes + py*p.stride + px*4
+	if at < 0 || at+4 > len(p.mem) {
+		return Color{}
+	}
+	return Color{R: p.mem[at+0], G: p.mem[at+1], B: p.mem[at+2], A: p.mem[at+3]}
+}
+
+// FillRect paints a viewed rectangle. Rotation means a viewed row is not always a run of memory, so
+// this is pixel by pixel rather than a copy.
+func (p *Panel) FillRect(x, y, w, h int, c Color) {
+	for iy := max(y, 0); iy < min(y+h, p.Height); iy++ {
+		for ix := max(x, 0); ix < min(x+w, p.Width); ix++ {
+			p.Set(ix, iy, c)
+		}
+	}
 }
 
 // Fill paints the whole page one colour.

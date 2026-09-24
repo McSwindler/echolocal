@@ -13,6 +13,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/hardware/screen"
 	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
@@ -72,6 +73,10 @@ func (t *Theme) Restore(c config.Config) {
 	slog.Info("restored", "what", t.sel.ObjectID, "using", t.sel.Get())
 }
 
+// Choose applies a palette and remembers it, which is what the panel's own settings do. Home
+// Assistant comes through the same path, so both ends agree on what is showing.
+func (t *Theme) Choose(name string) { t.choose(name) }
+
 func (t *Theme) choose(name string) {
 	t.apply(name)
 
@@ -98,4 +103,5 @@ func (t *Theme) apply(name string) {
 
 	t.sel.Set(found.Name)
 	Changed.Emit(found)
+	screen.Get().Repaint()
 }

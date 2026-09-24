@@ -14,7 +14,7 @@ import (
 )
 
 // Android ships a supplicant but no way to use it without the framework, so init runs it against
-// our own config and lanovod drives it over the control socket.
+// our own config and echod drives it over the control socket.
 const (
 	ConfigPath = layout.WifiConf
 	SocketDir  = layout.WifiSockets
@@ -46,7 +46,7 @@ func Dial() (*Control, error) {
 
 	// Unique per connection: events are listened to on one while commands go over another, and
 	// two binding the same name is one of them failing.
-	local := fmt.Sprintf("@lanovod-%d-%d", os.Getpid(), n)
+	local := fmt.Sprintf("@echod-%d-%d", os.Getpid(), n)
 
 	conn, err := net.DialUnix("unixgram",
 		&net.UnixAddr{Name: local, Net: "unixgram"},
@@ -165,26 +165,10 @@ func AwaitSupplicant() error {
 		}
 	}
 
-	sweep()
-
 	c, err := Dial()
 	if err != nil {
 		return fmt.Errorf("wifi: no supplicant on %s: %w", SocketDir, err)
 	}
 	c.Close()
 	return nil
-}
-
-// sweep removes the sockets earlier versions bound to a path, which anything that did not exit
-// cleanly left behind. Nothing creates them any more.
-func sweep() {
-	found, err := filepath.Glob(filepath.Join(SocketDir, "lanovod-*"))
-	if err != nil || len(found) == 0 {
-		return
-	}
-
-	for _, path := range found {
-		os.Remove(path)
-	}
-	slog.Info("cleared control sockets left by earlier runs", "count", len(found))
 }

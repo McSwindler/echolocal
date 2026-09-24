@@ -31,9 +31,30 @@ const Name = "goodix-ts"
 // Contacts is every finger, as it happens.
 var Contacts hook.Hook[Contact]
 
+// Gestures is what those fingers amounted to: a tap, or a swipe and which edge it came from.
+var Gestures hook.Hook[Gesture]
+
 type Touch struct {
 	mu  sync.Mutex
 	dev *input.Device
+	rec *Recognizer
+}
+
+// recognize feeds a contact to the recognizer, sized from the panel the first time it is needed.
+// The rotation is fixed on these boards, so it is never rebuilt.
+func (t *Touch) recognize(c Contact) (Gesture, bool) {
+	t.mu.Lock()
+	if t.rec == nil {
+		w, h := 0, 0
+		if p := screen.Get().Panel(); p != nil {
+			w, h = p.Width, p.Height
+		}
+		t.rec = NewRecognizer(w, h)
+	}
+	rec := t.rec
+	t.mu.Unlock()
+
+	return rec.Feed(c)
 }
 
 var (
@@ -105,8 +126,17 @@ func (t *Touch) Run(ctx context.Context) error {
 			return fmt.Errorf("touch: reading %s: %w", d.Path, err)
 		}
 		for _, c := range dec.event(e, time.Now()) {
-			Contacts.Emit(c)
+			t.Feed(c)
 		}
+	}
+}
+
+// Feed puts one contact through, as a finger on the panel and as whatever gesture it completes.
+func (t *Touch) Feed(c Contact) {
+	Contacts.Emit(c)
+
+	if g, ok := t.recognize(c); ok {
+		Gestures.Emit(g)
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 // netd holds the resolver bionic asks over /dev/socket/dnsproxyd, and ConnectivityService inside
-// system_server is what used to tell it anything. Without that every lookup outside lanovod fails,
+// system_server is what used to tell it anything. Without that every lookup outside echod fails,
 // so the lease is handed to netd as well as applied to the interface.
 //
 // The socket is FrameworkListener's: write "<seq> <command> <args>", read back "<code> <seq> <text>"
@@ -111,7 +111,7 @@ func quote(arg string) string {
 }
 
 // useNetd gives netd the lease, so everything on the device resolving through bionic follows what
-// lanovod holds. Re-sent on every lease: the servers and the router change with the network.
+// echod holds. Re-sent on every lease: the servers and the router change with the network.
 //
 // was is the lease this one replaces, or nil at startup. A renewal that keeps the address but
 // changes the router would otherwise leave the old default route in place beside the new one:

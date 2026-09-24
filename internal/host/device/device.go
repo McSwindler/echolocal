@@ -244,7 +244,7 @@ func (d *Device) Wait(ctx context.Context, states ...string) error {
 				if s != d.serial {
 					continue
 				}
-				if _, _, err := d.shell("true"); err == nil {
+				if _, err := d.rawShell("true"); err == nil {
 					return nil
 				}
 			}
@@ -323,9 +323,7 @@ func (d *Device) ShellCode(cmd string) (string, int, error) {
 // shell appends its own exit-status marker rather than trusting adb to propagate one, which older
 // adb does not.
 func (d *Device) shell(cmd string) (string, int, error) {
-	raw, err := d.withRetry(func() (string, error) {
-		return d.run(context.Background(), "shell", cmd+"; echo "+rcMarker+"$?")
-	})
+	raw, err := d.withRetry(func() (string, error) { return d.rawShell(cmd) })
 	if err != nil {
 		return "", 0, fmt.Errorf("device: running %q: %w", cmd, err)
 	}
@@ -522,12 +520,18 @@ func (d *Device) withRetry(do func() (string, error)) (string, error) {
 	return do()
 }
 
+// rawShell is shell without the retry, for waiting on a device that has gone away: retrying inside
+// the wait is what the wait is for.
+func (d *Device) rawShell(cmd string) (string, error) {
+	return d.run(context.Background(), "shell", cmd+"; echo "+rcMarker+"$?")
+}
+
 func (d *Device) back(ctx context.Context) error {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 
 	for {
-		if _, _, err := d.shell("true"); err == nil {
+		if _, err := d.rawShell("true"); err == nil {
 			return nil
 		}
 		select {

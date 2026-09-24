@@ -105,7 +105,7 @@ func hostname() string {
 }
 
 // Fallback is the hostname a device with no name of its own asks for.
-const Fallback = "lanovo"
+const Fallback = "echolocal"
 
 func joinIPs(ips []net.IP) string {
 	if len(ips) == 0 {

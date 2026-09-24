@@ -11,7 +11,7 @@ import (
 
 // apply puts the lease on the interface: the address, then the default route.
 //
-// Over rtnetlink rather than ip(8). The binary is a toybox applet on a system LANovo is actively
+// Over rtnetlink rather than ip(8). The binary is a toybox applet on a system echolocal is actively
 // stripping, and a service that stops working because an applet went away is a bad way to lose the
 // network.
 func apply(iface string, l *Lease) error {

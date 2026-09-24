@@ -21,6 +21,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/hardware/buttons"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/noise"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
 )
@@ -63,7 +64,13 @@ type Player struct {
 	// external is whatever else is driving the speaker, and nil when nothing is.
 	external atomic.Pointer[Source]
 
-	step int
+	// Volume carries the level whenever it moves in a way somebody should see.
+	Volume hook.Hook[int]
+
+	// turns takes a volume button where something else is what it moves.
+	turns atomic.Pointer[func(delta int) bool]
+
+	step atomic.Int64
 }
 
 // Source is audio this player did not start: a group the room has joined, playing through the same
@@ -205,9 +212,9 @@ func build() *Player {
 		}
 		switch e.Name {
 		case buttons.VolumeUp:
-			p.Adjust(1)
+			p.turn(1)
 		case buttons.VolumeDown:
-			p.Adjust(-1)
+			p.turn(-1)
 		}
 	})
 
@@ -466,7 +473,7 @@ func (p *Player) Set(step int) {
 // readout of the current level.
 func (p *Player) apply(step int, tell bool) int {
 	step = max(0, min(step, VolumeSteps))
-	p.step = step
+	p.step.Store(int64(step))
 
 	p.mp.SetVolume(float32(step) / VolumeSteps)
 	speaker.Get().SetVolume(step)
@@ -475,9 +482,13 @@ func (p *Player) apply(step int, tell bool) int {
 	}
 
 	p.show(step)
+	p.Volume.Emit(step)
 	slog.Info("volume", "step", step, "of", VolumeSteps)
 	return step
 }
+
+// Step is how loud the speaker is, out of VolumeSteps.
+func (p *Player) Step() int { return int(p.step.Load()) }
 
 // Mute drops the output without losing the level it was at.
 func (p *Player) Mute(muted bool) {
@@ -486,13 +497,24 @@ func (p *Player) Mute(muted bool) {
 		speaker.Get().SetVolume(0)
 		return
 	}
-	speaker.Get().SetVolume(p.step)
+	speaker.Get().SetVolume(p.Step())
+}
+
+// SetTurns says what a volume button moves when it is not the device's own level. It returns false
+// to leave the press to the device.
+func (p *Player) SetTurns(fn func(delta int) bool) { p.turns.Store(&fn) }
+
+func (p *Player) turn(delta int) {
+	if fn := p.turns.Load(); fn != nil && (*fn)(delta) {
+		return
+	}
+	p.Adjust(delta)
 }
 
 // Adjust moves the level by a step and says so, which is what the buttons and Home Assistant's own
 // up and down both do.
 func (p *Player) Adjust(delta int) {
-	p.Set(p.step + delta)
+	p.Set(p.Step() + delta)
 	speaker.Sound().Chime(speaker.ToneVolume)
 }
 

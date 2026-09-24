@@ -2,6 +2,8 @@ package screen
 
 import (
 	"context"
+	"fmt"
+	"image"
 	"log/slog"
 	"sync"
 
@@ -17,8 +19,19 @@ func init() {
 // Screen owns the panel. One handle: the mapping and the page being drawn into belong to it, so two
 // would fight over which page is showing.
 type Screen struct {
-	mu    sync.Mutex
-	panel *Panel
+	mu     sync.Mutex
+	panel  *Panel
+	claims []*Claim
+
+	// forced repaints the whole panel next frame, for a change no claim's damage describes: one
+	// appearing, one going away, the stack reordering.
+	forced bool
+
+	// damaged is what each of the last pages-1 frames changed. The page being drawn into was last
+	// drawn that many frames ago, so all of it has to be repainted as well.
+	damaged []image.Rectangle
+
+	changed chan struct{}
 }
 
 var (
@@ -66,8 +79,11 @@ func (s *Screen) Panel() *Panel {
 }
 
 func (s *Screen) Startup() component.Progress {
-	if s.Panel() == nil {
+	p := s.Panel()
+	if p == nil {
 		return component.Progress{Failed: true, Doing: "no panel"}
 	}
-	return component.Progress{Done: true}
+
+	b := p.Bounds()
+	return component.Progress{Done: true, Doing: fmt.Sprintf("%d×%d", b.Dx(), b.Dy())}
 }

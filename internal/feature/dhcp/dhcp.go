@@ -1,7 +1,7 @@
 // Package dhcp keeps an address on an interface.
 //
 // There is no DHCP client on this device: AOSP dropped dhcpcd in O and does it inside
-// system_server. So lanovod holds the lease itself — asks for one when the link comes up, renews
+// system_server. So echod holds the lease itself — asks for one when the link comes up, renews
 // before it expires, and asks again when the link goes away and returns.
 //
 // It watches the interface rather than being told about it, so it has nothing to do with what

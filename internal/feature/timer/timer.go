@@ -21,6 +21,7 @@ import (
 	"github.com/ygelfand/go-esphome-device/api"
 
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
@@ -278,7 +279,9 @@ func (t *Timers) ring(ctx context.Context) {
 
 	over := time.After(ringFor)
 	for {
-		sound.Interject(func(p *speaker.Player) { p.Chime(alarmLevel, speaker.ToneTimer...) })
+		sound.Interject(func(p *speaker.Player) {
+			p.ChimeStream(config.StreamAlerts, alarmLevel, speaker.ToneTimer...)
+		})
 
 		select {
 		case <-ctx.Done():

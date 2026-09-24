@@ -1,0 +1,39 @@
+# The text the device shows, in English.
+#
+# Identifiers are <screen>.<thing>. A translation is a copy of this file under its language tag; a
+# line it does not carry falls back to the English here rather than showing the identifier.
+
+# What this language calls itself, for the row that picks it. In its own language rather than in
+# English: somebody who cannot read the current language is looking for a word they recognise.
+language.name: English
+
+# The screen a device nobody has added yet holds up, beside the code to scan.
+onboard.title: Add me to Home Assistant
+
+# The side of the picture the drawer is pulled in from.
+edge.left: Left
+edge.right: Right
+edge.top: Top
+edge.bottom: Bottom
+
+# The settings, on the device itself.
+settings.title: Settings
+settings.display: Display
+settings.volume: Volume
+settings.features: Features
+settings.theme: Theme
+settings.drawer: Drawer
+settings.marks: Privacy marks
+
+# The subsystems the device can be told to run.
+features.title: Features
+features.sendspin: Sendspin
+features.sendspin.hint: Whole-home audio
+features.proxy: Bluetooth proxy
+features.proxy.hint: Bluetooth LE proxy for Home Assistant
+
+# The player, on the device itself.
+player.title: Player
+player.playing: Playing
+player.paused: Paused
+player.idle: Nothing playing

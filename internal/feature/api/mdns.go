@@ -43,8 +43,11 @@ func (a *API) advertise(ctx context.Context, port int) {
 			Version:      a.srv.Info.Version,
 			Platform:     layout.Platform,
 			Board:        config.Get().Device.Board.Codename,
-			Encrypted:    a.srv.PSK != nil,
-			IPs:          ips,
+			// A zero key is not encryption to advertise: it says the device is waiting to be given
+			// one, which is what stops Home Assistant asking for a key nobody has.
+			Encrypted:     a.srv.PSK != nil && !a.srv.PSK.IsZero(),
+			Provisionable: a.srv.PSK != nil && a.srv.PSK.IsZero(),
+			IPs:           ips,
 		})
 		if err != nil {
 			// Only the first failure is worth a warning: after that it is the expected state of a

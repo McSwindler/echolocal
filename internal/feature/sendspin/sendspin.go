@@ -75,13 +75,7 @@ func build() *Player {
 			Category: esphome.CategoryConfig,
 			DeviceID: component.DevicePlayback,
 		},
-		OnCommand: func(on bool) {
-			p.enabled.Set(on)
-			if err := config.Set().Sendspin().Enabled(on); err != nil {
-				slog.Error("saving a setting failed", "setting", p.enabled.ObjectID, "err", err)
-			}
-			p.rethink()
-		},
+		OnCommand: func(on bool) { shared.SetEnabled(on) },
 	}
 
 	p.state = &esphome.TextSensor{
@@ -227,6 +221,15 @@ func (p *Player) Artwork() []byte {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.artwork
+}
+
+// SetEnabled turns the room's part of a synchronized stream on or off.
+func (p *Player) SetEnabled(on bool) {
+	p.enabled.Set(on)
+	if err := config.Set().Sendspin().Enabled(on); err != nil {
+		slog.Error("saving a setting failed", "setting", p.enabled.ObjectID, "err", err)
+	}
+	p.rethink()
 }
 
 // Restore puts the switch back where it was left. Listening waits for Run, once there is a network.

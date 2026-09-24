@@ -31,7 +31,7 @@ func newButtonsCmd() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			for _, d := range devs {
-				fmt.Fprintf(out, "watching %s (%s)\n", d.Path, d.Name)
+				fmt.Fprintf(out, "watching %s (%s)%s\n", d.Path, d.Name, cover(d))
 			}
 			fmt.Fprintf(out, "\npress buttons for %.0fs...\n\n", secs)
 
@@ -72,4 +72,20 @@ func newButtonsCmd() *cobra.Command {
 
 	c.Flags().Float64VarP(&secs, "seconds", "t", 20, "how long to watch")
 	return c
+}
+
+// cover is where this node's camera cover is sitting, for a node that has one. A switch only reports
+// when it moves, so watching alone never says where one already is.
+func cover(d *input.Device) string {
+	if !d.HasSwitch(input.SwCameraLensCover) {
+		return ""
+	}
+	open, err := d.Switch(input.SwCameraLensCover)
+	if err != nil {
+		return fmt.Sprintf(" — camera cover: %v", err)
+	}
+	if open {
+		return " — camera cover: open"
+	}
+	return " — camera cover: closed"
 }

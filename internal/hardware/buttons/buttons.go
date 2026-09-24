@@ -1,4 +1,5 @@
-// Package buttons owns the four buttons on top of the device.
+// Package buttons owns the controls on the outside of the device: the four buttons on top, and the
+// camera cover on a board that has one.
 //
 // It reads the input nodes and says what happened. It does not know what any of it means: that a long
 // press of the action button reaches the second assistant belongs to whatever is listening, and
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/input"
@@ -25,21 +27,32 @@ func init() {
 		component.Supervise(service.Restart(time.Second, 30*time.Second)))
 }
 
-// Name is which button. The evdev codes are the device's own.
-type Name string
+// Name is the control, which the board names: the same button is a different code per board.
+type Name = board.Key
 
 const (
-	Mute       Name = "mute"
-	VolumeDown Name = "volume_down"
-	VolumeUp   Name = "volume_up"
-	Action     Name = "action"
+	Mute       = board.Mute
+	VolumeDown = board.VolumeDown
+	VolumeUp   = board.VolumeUp
+	Action     = board.Action
 )
 
+// codes is what a board that says nothing reports.
 var codes = map[uint16]Name{
 	113: Mute,
 	114: VolumeDown,
 	115: VolumeUp,
 	138: Action,
+}
+
+// keyFor is the control a code stands for. The board is asked first, so a board that reuses a
+// keycode is read its own way and every other board keeps the defaults untouched.
+func keyFor(code uint16) (Name, bool) {
+	if n, ok := component.Board().Keys[code]; ok {
+		return n, true
+	}
+	n, ok := codes[code]
+	return n, ok
 }
 
 // LongPress is how long a button must be held to count as held rather than pressed, and
@@ -84,8 +97,13 @@ func repeats(n Name) bool { return n == VolumeUp || n == VolumeDown }
 type Controller struct {
 	Events hook.Hook[Event]
 
+	// Shutter carries the camera cover's position, true when the camera is covered.
+	Shutter hook.Hook[bool]
+
 	mu      sync.Mutex
 	devices []*input.Device
+	shutter bool
+	covered bool
 }
 
 var (
@@ -112,12 +130,56 @@ func (c *Controller) Start(context.Context) error {
 		return fmt.Errorf("buttons: no input devices")
 	}
 
+	shutter := component.Board().Has(board.Shutter)
+
 	c.mu.Lock()
 	c.devices = devices
+	c.shutter = shutter
 	c.mu.Unlock()
+
+	if shutter {
+		c.findShutter(devices)
+	}
 
 	slog.Debug("buttons ready", "devices", len(devices))
 	return nil
+}
+
+// findShutter reads where the cover is sitting now.
+func (c *Controller) findShutter(devices []*input.Device) {
+	for _, d := range devices {
+		if !d.HasSwitch(input.SwCameraLensCover) {
+			continue
+		}
+		open, err := d.Switch(input.SwCameraLensCover)
+		if err != nil {
+			slog.Warn("reading the camera cover", "device", d.Path, "err", err)
+			return
+		}
+		c.setCovered(!open)
+		return
+	}
+	slog.Warn("no camera cover on a board that should have one")
+}
+
+// setCovered records the cover's position and tells anyone listening, if it moved.
+func (c *Controller) setCovered(covered bool) {
+	c.mu.Lock()
+	changed := c.covered != covered
+	c.covered = covered
+	c.mu.Unlock()
+
+	if changed {
+		slog.Info("camera cover", "covered", covered)
+		c.Shutter.Emit(covered)
+	}
+}
+
+// Covered is whether the camera is covered, and false on a board with no cover.
+func (c *Controller) Covered() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.covered
 }
 
 // Close releases the nodes, which is also what unblocks the readers: a read on an input node waits
@@ -203,25 +265,36 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 			}
 			return fmt.Errorf("buttons: reading %s: %w", d.Path, err)
 		}
-		if e.Type != input.EvKey {
-			continue
-		}
-		name, ok := codes[e.Code]
-		if !ok {
-			continue
-		}
-
-		switch e.Value {
-		case 1:
-			down[e.Code] = c.pressed(name)
-		case 0:
-			h, ok := down[e.Code]
-			if !ok {
-				continue
+		switch e.Type {
+		case input.EvKey:
+			c.key(e, down)
+		case input.EvSw:
+			if c.shutter && e.Code == input.SwCameraLensCover {
+				c.setCovered(!open(e.Value))
 			}
-			delete(down, e.Code)
-			c.released(name, h)
 		}
+	}
+}
+
+// 0 is covered and 1 is open, the opposite way up from the switch's name. Measured on checkers.
+func open(value int32) bool { return value != 0 }
+
+func (c *Controller) key(e input.Event, down map[uint16]*held) {
+	name, ok := keyFor(e.Code)
+	if !ok {
+		return
+	}
+
+	switch e.Value {
+	case 1:
+		down[e.Code] = c.pressed(name)
+	case 0:
+		h, ok := down[e.Code]
+		if !ok {
+			return
+		}
+		delete(down, e.Code)
+		c.released(name, h)
 	}
 }
 

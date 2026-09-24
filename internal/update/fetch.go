@@ -79,6 +79,9 @@ func (b Binary) Resolve(ctx context.Context, progress func(float64)) ([]byte, st
 		if err := b.check(b.URL, data); err != nil {
 			return nil, "", err
 		}
+		if progress != nil {
+			progress(1)
+		}
 		return data, b.URL, nil
 	}
 

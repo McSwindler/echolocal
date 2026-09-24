@@ -29,6 +29,19 @@ const (
 
 	// Wifi is a board where nothing brings the radio up on its own.
 	Wifi
+
+	// Shutter is a physical cover over the camera, reported as an EV_SW switch.
+	Shutter
+)
+
+// Key is a physical control. The same button is a different code on different boards.
+type Key string
+
+const (
+	Mute       Key = "mute"
+	VolumeDown Key = "volume_down"
+	VolumeUp   Key = "volume_up"
+	Action     Key = "action"
 )
 
 // Board is a model of device.
@@ -65,6 +78,9 @@ type Board struct {
 	// Caps is what this board has. Zero where nobody has checked, which is not the same as none.
 	Caps Cap
 
+	// Keys is what this board's buttons report, where they are not the usual codes.
+	Keys map[uint16]Key
+
 	// PanelRotation turns the picture the right way up, in degrees from the framebuffer's own
 	// orientation. Only somebody looking at the device can say: a capture reads back through the
 	// same rotation it was drawn with, so it looks correct either way.
@@ -92,26 +108,6 @@ func (b Board) String() string {
 	}
 	return b.Codename
 }
-
-// Color is the device's shell as Home Assistant shows it, "unknown" on a board whose idme encoding
-// nobody has decoded. idme reads a factory identity field.
-//
-// Per-board because the encoding is: biscuit's answer is spread across productid2 and the serial
-// prefix, which says nothing about how another board records it, and "black or white" is not even
-// the right set of answers for a device with a screen.
-func (b Board) Color(idme func(string) string) string {
-	if b.color == nil {
-		return ColorUnknown
-	}
-	return b.color(idme)
-}
-
-// The shell colours a board may report.
-const (
-	ColorBlack   = "black"
-	ColorWhite   = "white"
-	ColorUnknown = "unknown"
-)
 
 // NameFromMAC builds the fallback display name, unique per device.
 func (b Board) NameFromMAC(mac string) string {

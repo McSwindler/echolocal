@@ -41,7 +41,7 @@ func newInstallCmd() *cobra.Command {
 		ssid      string
 		password  string
 		wps       bool
-		zeroPSK   bool
+		genKey    bool
 		flashOnly bool
 		assumeYes bool
 		doReboot  bool
@@ -76,7 +76,7 @@ func newInstallCmd() *cobra.Command {
 				return err
 			}
 
-			cfg := installer.Config{ZeroPSK: zeroPSK, Profile: p}
+			cfg := installer.Config{ZeroPSK: !genKey, Profile: p}
 
 			// The image is only resolved when it is going to be written. A device that already has root
 			// needs none, so an install onto one never touches the network.
@@ -163,8 +163,8 @@ func newInstallCmd() *cobra.Command {
 		"write the boot image and stop, without installing echod")
 	c.Flags().BoolVarP(&assumeYes, "yes", "y", false,
 		"do not ask before overwriting the boot partition")
-	c.Flags().BoolVar(&zeroPSK, "zero-psk", false,
-		"leave the device unprovisioned so Home Assistant can push a key, instead of generating one")
+	c.Flags().BoolVar(&genKey, "generate-key", false,
+		"generate the encryption key here, to paste in by hand, instead of letting Home Assistant push one")
 	c.Flags().BoolVar(&doReboot, "reboot", false, "reboot at the end without asking")
 	c.Flags().BoolVar(&noReboot, "no-reboot", false, "finish without rebooting, and without asking")
 	c.MarkFlagsMutuallyExclusive("reboot", "no-reboot")
@@ -181,8 +181,10 @@ func printPairing(out io.Writer, d *device.Device, name string) error {
 	}
 
 	if key == "" {
-		fmt.Fprintf(out, "\n%s\n", styleDetail.Render(
-			"unprovisioned: Home Assistant will push an encryption key on first connection"))
+		fmt.Fprintf(out, "\n%s\n%s\n",
+			styleTitle.Render("Add to Home Assistant"),
+			styleDetail.Render("  Settings → Devices → ESPHome → "+name+
+				"\n  zero psk provisioning enabled"))
 		return nil
 	}
 

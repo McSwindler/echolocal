@@ -3,6 +3,7 @@ package sendspin
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/Sendspin/sendspin-go/pkg/protocol"
 )
@@ -29,7 +30,7 @@ func TestTrackMerge(t *testing.T) {
 	}{
 		{
 			name: "an absent key leaves what was there",
-			raw:  `{"progress":{"track_progress":1000}}`,
+			raw:  `{"year":1998}`,
 			want: was,
 		},
 		{
@@ -62,5 +63,32 @@ func TestTrackEmpty(t *testing.T) {
 	}
 	if (track{Title: "Rez"}).empty() {
 		t.Error("a track with a title is empty")
+	}
+}
+
+func TestTrackProgress(t *testing.T) {
+	got := track{Title: "Rez"}.merge(decode(t, `{"progress":{"track_progress":1000,"track_duration":5000}}`))
+
+	if got.Elapsed != time.Second || got.Length != 5*time.Second {
+		t.Errorf("merge progress = %v of %v, want 1s of 5s", got.Elapsed, got.Length)
+	}
+	if got.At.IsZero() {
+		t.Error("progress arrived with no time on it")
+	}
+	if got.Title != "Rez" {
+		t.Errorf("progress cleared the title, got %q", got.Title)
+	}
+}
+
+// A bar drawn from the last report alone steps every few seconds, and one that runs on past the
+// end of the track reads as a track that has not finished.
+func TestTrackRunsOn(t *testing.T) {
+	was := track{Elapsed: time.Second, Length: 2 * time.Second, At: time.Now().Add(-10 * time.Second)}
+
+	if at := was.at(false); at != time.Second {
+		t.Errorf("paused at %v, want 1s", at)
+	}
+	if at := was.at(true); at != 2*time.Second {
+		t.Errorf("playing at %v, want the 2s length", at)
 	}
 }

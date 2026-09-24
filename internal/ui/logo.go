@@ -7,6 +7,8 @@ import (
 	"image"
 	_ "image/png"
 	"sync"
+
+	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
 
 // The mark, one for each kind of background. Two drawings rather than one and a rule: the dark one
@@ -38,6 +40,26 @@ func Mark(onDark bool) image.Image {
 		return Night()
 	}
 	return Logo()
+}
+
+// DrawLogo paints the mark to fit inside a box, keeping its proportions and centred in whatever
+// room is left over. on is the background it is composited against.
+func DrawLogo(s Surface, r Rect, on theme.Color) {
+	img := Mark(theme.Dark(on))
+	if img == nil {
+		return
+	}
+
+	b := img.Bounds()
+	w, h := r.W, r.H
+	if b.Dx()*r.H > b.Dy()*r.W {
+		h = b.Dy() * r.W / b.Dx()
+	} else {
+		w = b.Dx() * r.H / b.Dy()
+	}
+
+	at := Rect{X: r.X + (r.W-w)/2, Y: r.Y + (r.H-h)/2, W: w, H: h}
+	DrawImageScaled(s, img, at, on)
 }
 
 func decode(once *sync.Once, into *image.Image, raw []byte) image.Image {

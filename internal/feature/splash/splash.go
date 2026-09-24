@@ -4,12 +4,14 @@ package splash
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/feature/api"
 	"github.com/ygelfand/echolocal/internal/feature/theme"
 	"github.com/ygelfand/echolocal/internal/hardware/screen"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -35,7 +37,7 @@ const (
 	look = 250 * time.Millisecond
 )
 
-type Splash struct{}
+type Splash struct{ hold *screen.Claim }
 
 var (
 	once   sync.Once
@@ -48,28 +50,26 @@ func (s *Splash) Name() string { return "splash" }
 
 // Start puts the mark up, full screen, before anything else has run.
 func (s *Splash) Start(context.Context) error {
-	p := screen.Get().Panel()
-	if p == nil {
+	if screen.Get().Panel() == nil {
 		return nil
 	}
 
-	t := theme.Get().Current()
-	bg := colour(t.Background)
+	s.hold = screen.Get().Claim(screen.PriorityBoot)
+	s.hold.Show(func(p *screen.Panel) error {
+		t := theme.Get().Current()
+		bg := colour(t.Background)
 
-	p.Fill(bg)
-	p.Draw(ui.Mark(t.Dark), p.Bounds(), bg)
-
-	if err := p.Flip(); err != nil {
-		slog.Error("drawing the splash failed", "err", err)
-	}
+		p.Fill(bg)
+		p.Draw(ui.Mark(t.Dark), p.Bounds(), bg)
+		return nil
+	})
 	return nil
 }
 
 // Run shows the mark for a moment, then what the device is still waiting for, and finishes once
 // everything is up.
 func (s *Splash) Run(ctx context.Context) error {
-	p := screen.Get().Panel()
-	if p == nil {
+	if s.hold == nil {
 		<-ctx.Done()
 		return nil
 	}
@@ -95,10 +95,10 @@ func (s *Splash) Run(ctx context.Context) error {
 		}
 		said = now
 
-		drawBoot(p, theme.Get().Current(), progress)
-		if err := p.Flip(); err != nil {
-			slog.Error("drawing the boot screen failed", "err", err)
-		}
+		s.hold.Show(func(p *screen.Panel) error {
+			drawBoot(p, theme.Get().Current(), progress)
+			return nil
+		})
 		slog.Info("coming up", "waiting", now)
 	}
 
@@ -116,6 +116,41 @@ func (s *Splash) Run(ctx context.Context) error {
 	draw()
 
 	slog.Info("ready")
+	return s.onboard(ctx)
+}
+
+// onboard holds the pairing code up until Home Assistant has the device. A device already adopted
+// releases the panel to whatever is under it.
+func (s *Splash) onboard(ctx context.Context) error {
+	if api.Adopted() {
+		s.hold.Release()
+		return nil
+	}
+
+	// Setup rather than boot: the device is up, it is just not anybody's yet, so a notice or an
+	// alert belongs over the top of this.
+	s.hold.Release()
+	s.hold = screen.Get().Claim(screen.PrioritySetup)
+
+	key := pairing()
+	s.hold.Show(func(p *screen.Panel) error {
+		drawOnboard(p, theme.Get().Current(), key)
+		return nil
+	})
+	slog.Info("waiting to be added to home assistant")
+
+	t := time.NewTicker(look)
+	defer t.Stop()
+
+	for !api.Adopted() {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+	}
+
+	s.hold.Release()
 	return nil
 }
 
@@ -123,9 +158,7 @@ func (s *Splash) Run(ctx context.Context) error {
 func summary(progress []component.Progress) string {
 	var s string
 	for _, p := range progress {
-		if !p.Settled() {
-			s += p.Name + ":" + p.Doing + " "
-		}
+		s += fmt.Sprintf("%s:%v:%s ", p.Name, p.Settled(), p.Doing)
 	}
 	return s
 }

@@ -68,6 +68,8 @@ type Player struct {
 	volume atomic.Uint32 // linear gain, derived from step and the current output's curve
 	step   atomic.Int32
 
+	levels levels
+
 	pathMu sync.Mutex
 	out    Output
 
@@ -463,6 +465,7 @@ func (p *Player) render() []int16 {
 	clear(p.srcBuf)
 
 	src.Render(p.written.Load(), p.srcBuf)
+	attenuate(p.srcBuf, p.Level(config.StreamMedia))
 	return p.srcBuf
 }
 
@@ -471,7 +474,14 @@ func (p *Player) render() []int16 {
 // Audio offered while the device is not held is dropped rather than queued. Nothing is draining the
 // queue then, so it would grow for as long as the speaker stayed away — and a device that cannot play
 // should say so in the log rather than in memory.
-func (p *Player) Play(samples []int16) {
+func (p *Player) Play(samples []int16) { p.PlayStream(config.StreamMedia, samples) }
+
+// PlayStream queues audio at the level its kind of sound is set to.
+func (p *Player) PlayStream(s config.Stream, samples []int16) {
+	p.queue(quieter(samples, p.Level(s)))
+}
+
+func (p *Player) queue(samples []int16) {
 	if pb, _ := p.device(); pb == nil {
 		if n := p.deaf.Add(1); n == 1 || n%100 == 0 {
 			slog.Warn("audio dropped, no playback device", "times", n)
@@ -511,7 +521,7 @@ func (p *Player) PlayVoice(mono []int16) {
 	out := p.voice.Run(mono, make([]int16, 0, len(mono)*VoiceUpsample*Channels))
 	p.voiceMu.Unlock()
 
-	p.Play(out)
+	p.PlayStream(config.StreamVoice, out)
 }
 
 // Drain discards anything queued but not yet played, for a barge-in. The resampler's history goes
@@ -593,18 +603,23 @@ func (p *Player) Beep(freq float64, ms int, level float64) {
 // is a reply's cushion or, when the reply came as a file, all of it, and a beep that waits is a beep
 // that arrives after the answer.
 func (p *Player) Chime(level float64, notes ...Note) {
+	p.ChimeStream(config.StreamFeedback, level, notes...)
+}
+
+// ChimeStream sounds notes at the level its kind of sound is set to.
+func (p *Player) ChimeStream(s config.Stream, level float64, notes ...Note) {
 	var out []int16
 	for _, n := range notes {
 		out = append(out, tone(n, level)...)
 	}
-	p.Overlay(out)
+	p.Overlay(quieter(out, p.Level(s)))
 }
 
 // Overlay mixes samples into what is already queued, extending the queue if they outlast it. Sums are
 // clamped: two things at once are louder than either, and wrapping would turn that into a crack.
 func (p *Player) Overlay(samples []int16) {
 	if pb, _ := p.device(); pb == nil {
-		p.Play(samples)
+		p.queue(samples)
 		return
 	}
 

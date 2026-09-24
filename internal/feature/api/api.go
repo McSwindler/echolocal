@@ -68,7 +68,7 @@ func (a *API) Startup() component.Progress {
 	if !a.listening.Load() {
 		return component.Progress{Doing: "opening the port"}
 	}
-	return component.Progress{Done: true}
+	return component.Progress{Done: true, Doing: fmt.Sprintf("port %d", layout.Port)}
 }
 
 // Start builds the server. Not the constructor, because what the server serves is the registry, and
@@ -113,7 +113,10 @@ func (a *API) Start(context.Context) error {
 		// Persist a key Home Assistant pushes, or the next connection reverts to the old one.
 		OnSetEncryptionKey: func(k esphome.PSK) error { return writePSK(layout.KeyPath, k) },
 
-		OnSubscribed: func() { component.Subscribed.Emit(struct{}{}) },
+		OnSubscribed: func() {
+			adopted()
+			component.Subscribed.Emit(struct{}{})
+		},
 
 		// The handlers components answer for themselves rather than through an entity: the voice
 		// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
@@ -224,6 +227,32 @@ func loadPSK(path string) (*esphome.PSK, error) {
 		return nil, fmt.Errorf("api: key at %s: %w", path, err)
 	}
 	return &k, nil
+}
+
+// Adopted reports whether Home Assistant has ever had this device, which is what takes the
+// onboarding screen away.
+func Adopted() bool { return config.Get().API.Adopted }
+
+// Key is the encryption key Home Assistant pairs with, empty on a device running unprovisioned.
+func Key() string {
+	b, err := os.ReadFile(layout.KeyPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// adopted records the first subscription. Written once: every one after it is the same answer.
+func adopted() {
+	if Adopted() {
+		return
+	}
+
+	if err := config.Set().API().Adopted(true); err != nil {
+		slog.Error("recording adoption failed", "err", err)
+		return
+	}
+	slog.Info("adopted")
 }
 
 func writePSK(path string, k esphome.PSK) error {

@@ -9,7 +9,7 @@ import (
 // Probe asks whether anything on the segment already holds an address, which is what the client
 // does before it takes a new one.
 //
-// Exported for lanovod tools probe. Running it by hand against an address that is in use is the
+// Exported for echod tools probe. Running it by hand against an address that is in use is the
 // only way to see the conflict path work on real hardware: the client says nothing when the
 // address is free, which is the case on every network it is likely to be tried on.
 func Probe(iface string, ip net.IP) (bool, error) { return probe(iface, ip) }

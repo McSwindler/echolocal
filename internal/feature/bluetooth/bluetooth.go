@@ -101,17 +101,7 @@ func build() *Proxy {
 	b.proxy.OnMode = func(bool) { b.apply() }
 
 	b.enable.Set(config.Get().Bluetooth.Proxy)
-	b.enable.OnCommand = func(on bool) {
-		b.enable.Set(on)
-		if err := config.Set().Bluetooth().Proxy(on); err != nil {
-			slog.Error("saving the bluetooth proxy setting failed", "err", err)
-			return
-		}
-		b.apply()
-
-		// What the device advertises has changed, and that is only read when a client connects.
-		component.Reconnect.Emit(struct{}{})
-	}
+	b.enable.OnCommand = b.SetProxy
 
 	safe.Go("ble radio", b.settle)
 	safe.Go("ble reports", b.deliver)
@@ -138,6 +128,19 @@ func (b *Proxy) Handle(ctx context.Context, conn *esphome.Conn, msg proto.Messag
 
 // Enabled reports whether the user has asked for the proxy.
 func (b *Proxy) Enabled() bool { return config.Get().Bluetooth.Proxy }
+
+// SetProxy turns the BLE proxy on or off.
+func (b *Proxy) SetProxy(on bool) {
+	b.enable.Set(on)
+	if err := config.Set().Bluetooth().Proxy(on); err != nil {
+		slog.Error("saving the bluetooth proxy setting failed", "err", err)
+		return
+	}
+	b.apply()
+
+	// What the device advertises has changed, and that is only read when a client connects.
+	component.Reconnect.Emit(struct{}{})
+}
 
 // Reports is how many advertisements the radio has heard, for diagnostics.
 func (b *Proxy) Reports() uint64 { return b.radio.Reports() }

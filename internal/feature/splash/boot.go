@@ -2,8 +2,6 @@ package splash
 
 import (
 	"image"
-	"image/color"
-	"image/draw"
 
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/hardware/screen"
@@ -31,7 +29,7 @@ func drawBoot(p *screen.Panel, t uitheme.Theme, progress []component.Progress) {
 	if len(progress) == 0 {
 		return
 	}
-	p.Blit(rows(list, t, progress), list.Min, bg)
+	rows(ui.Of(p), box(list), t, progress)
 }
 
 // split is where the mark goes and where the list goes.
@@ -49,23 +47,22 @@ func inset(r image.Rectangle, by int) image.Rectangle {
 	return image.Rect(r.Min.X+by, r.Min.Y+by, r.Max.X-by, r.Max.Y-by)
 }
 
-// rows renders the list into an image of its own, so the text is drawn once and put on the panel in
-// one pass rather than a glyph at a time through the rotation.
-func rows(in image.Rectangle, t uitheme.Theme, progress []component.Progress) *image.RGBA {
-	out := image.NewRGBA(image.Rect(0, 0, in.Dx(), in.Dy()))
-	draw.Draw(out, out.Bounds(), image.NewUniform(rgba(t.Background)), image.Point{}, draw.Src)
+// box is a rectangle as the canvas wants it.
+func box(r image.Rectangle) ui.Rect {
+	return ui.Rect{X: r.Min.X, Y: r.Min.Y, W: r.Dx(), H: r.Dy()}
+}
 
-	row := int(float64(min(in.Dx(), in.Dy())) * rowShare)
-	namePx := float64(row) * nameShare
-	doingPx := float64(row) * doingShare
+// rows draws the list, each name with what it is waiting for under it.
+func rows(s ui.Surface, in ui.Rect, t uitheme.Theme, progress []component.Progress) {
+	row := int(float64(min(in.W, in.H)) * rowShare)
+
+	name := ui.MustLoad(ui.Medium, int(float64(row)*nameShare))
+	doing := ui.MustLoad(ui.Regular, int(float64(row)*doingShare))
 
 	dot := int(float64(row) * dotShare)
-	left := row / 2
-	top := (in.Dy() - len(progress)*row) / 2
-
+	left := in.X + row/2
+	top := in.Y + (in.H-len(progress)*row)/2
 	gap := row / 12
-	nameUp, nameDown := ui.Metrics(namePx)
-	doingUp, doingDown := ui.Metrics(doingPx)
 
 	for i, at := range progress {
 		y := top + i*row
@@ -77,35 +74,24 @@ func rows(in image.Rectangle, t uitheme.Theme, progress []component.Progress) *i
 		case at.Done:
 			mark = t.Accent
 		}
-		disc(out, left+dot/2, y+row/2, dot/2, rgba(mark))
+		ui.FillRounded(s, ui.Rect{X: left, Y: y + (row-dot)/2, W: dot, H: dot}, dot/2, mark)
 
 		x := left + dot + row/3
-		saying := at.Doing != "" && !at.Done
+		saying := at.Doing != ""
 
-		// Both lines are centred as one block, so the second never lands on the first's descenders.
-		tall := nameUp + nameDown
+		// Both lines are placed as one block, so the second never lands on the first's descenders.
+		_, nameH := name.Measure(at.Name)
+		_, doingH := doing.Measure(at.Doing)
+
+		tall := nameH
 		if saying {
-			tall += gap + doingUp + doingDown
+			tall += gap + doingH
 		}
-		base := y + (row-tall)/2 + nameUp
+		up := y + (row-tall)/2
 
-		ui.Line(out, at.Name, namePx, image.Pt(x, base), rgba(t.Text))
+		ui.DrawText(s, name, x, up, t.Text, t.Background, at.Name)
 		if saying {
-			ui.Line(out, at.Doing, doingPx, image.Pt(x, base+nameDown+gap+doingUp), rgba(t.Muted))
-		}
-	}
-	return out
-}
-
-// disc is the state mark beside a row.
-func disc(dst *image.RGBA, cx, cy, r int, c color.Color) {
-	for y := -r; y <= r; y++ {
-		for x := -r; x <= r; x++ {
-			if x*x+y*y <= r*r {
-				dst.Set(cx+x, cy+y, c)
-			}
+			ui.DrawText(s, doing, x, up+nameH+gap, t.Muted, t.Background, at.Doing)
 		}
 	}
 }
-
-func rgba(c uitheme.Color) color.RGBA { return color.RGBA{R: c.R, G: c.G, B: c.B, A: 0xFF} }

@@ -22,6 +22,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/privacy"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 )
 
 func init() {
@@ -40,6 +41,9 @@ const (
 var mutedColor = led.Color{R: 0xC0, G: 0x00, B: 0x00}
 
 type Mute struct {
+	// Changed carries where the line ended up, every time it settles.
+	Changed hook.Hook[bool]
+
 	sw         *esphome.Switch
 	brightness *esphome.Select
 	line       privacy.Mute
@@ -172,6 +176,7 @@ func (m *Mute) Set(muted bool) {
 	}
 	if err := m.line.Set(muted); err != nil {
 		slog.Error("setting mute failed", "muted", muted, "err", err)
+		m.settled(false)
 		return
 	}
 	m.settled(true)
@@ -221,6 +226,7 @@ func (m *Mute) settled(asked bool) {
 
 	m.sw.Set(muted)
 	m.show(component.ChosenEffect(m.ring))
+	m.Changed.Emit(muted)
 
 	if !asked {
 		return
