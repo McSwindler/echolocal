@@ -228,6 +228,9 @@ const (
 
 	// ToneRise is three ascending notes, the most conspicuous of them.
 	ToneRise Tone = "rise"
+
+	// ToneMuteSwitch is a falling pair for muting and a rising one for unmuting.
+	ToneMuteSwitch Tone = "mute"
 )
 
 // Label is how the setting is shown.
@@ -241,6 +244,8 @@ func (t Tone) Label() string {
 		return "Ding"
 	case ToneRise:
 		return "Rise"
+	case ToneMuteSwitch:
+		return "Mute tones"
 	}
 	return string(t)
 }

@@ -159,7 +159,7 @@ device: ## Say which device the device targets would write to, and refuse an unk
 	if [ "$$n" -eq 0 ]; then echo "no device attached"; exit 1; fi; \
 	if [ "$$n" -gt 1 ] && [ -z "$(DEVICE)" ]; then \
 		echo "$$n devices attached, so name one:"; \
-		$(ADB) devices | grep "device$$" | sed 's/^/  make DEVICE=/;s/\tdevice$$//'; \
+		$(ADB) devices -l | grep "device " | sed 's/^/  make DEVICE=/;s/\tdevice //'; \
 		exit 1; \
 	fi
 	@$(BOARD_SH) >/dev/null || { \

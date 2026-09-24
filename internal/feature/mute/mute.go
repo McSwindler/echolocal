@@ -46,6 +46,7 @@ type Mute struct {
 
 	sw         *esphome.Switch
 	brightness *esphome.Select
+	sound      *esphome.Select
 	line       privacy.Mute
 	led        privacy.LED
 
@@ -78,6 +79,15 @@ func build() *Mute {
 			},
 		},
 		claim: indicate.Get().Claim(indicate.PriorityMute),
+		sound: &esphome.Select{
+			Base: esphome.Base{
+				ObjectID: "mute_sound",
+				DeviceID: component.DeviceMicrophone,
+				Name:     "Mute sound",
+				Icon:     "mdi:music-note",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		ring: &esphome.Select{
 			Base: esphome.Base{
 				ObjectID: "ring_muted",
@@ -89,6 +99,8 @@ func build() *Mute {
 		},
 	}
 	m.sw.OnCommand = m.Set
+	component.Bind(m.sound, speaker.MuteTones(), func(t config.Tone) config.Tone { return t },
+		config.Set().Microphone().MuteSound)
 	component.BindEffect(m.ring, led.EffectNames(), m.show, config.Set().Ring().Muted)
 
 	// The entities exist whether or not the pins do. A device that hides controls when its hardware
@@ -123,7 +135,7 @@ func (m *Mute) Name() string { return "microphone mute" }
 // microphones are cut is only a question where there is a ring, so that setting is offered only
 // there — an option that cannot do anything is worse than no option.
 func (m *Mute) Entities() []esphome.Entity {
-	ents := []esphome.Entity{m.sw, m.brightness}
+	ents := []esphome.Entity{m.sw, m.brightness, m.sound}
 	if component.Board().Has(board.Ring) {
 		ents = append(ents, m.ring)
 	}
@@ -144,6 +156,8 @@ func (m *Mute) Muted() (bool, error) {
 // decides, so a device whose mute cannot be reached comes up live and says so rather than claiming
 // to be muted.
 func (m *Mute) Restore(c config.Config) {
+	component.Restore(m.sound, c.Microphone.MuteSound, func(t config.Tone) config.Tone { return t })
+
 	if m.line == nil {
 		return
 	}
@@ -237,11 +251,7 @@ func (m *Mute) settled(asked bool) {
 	}
 	slog.Info("microphone mute", "muted", muted)
 
-	if muted {
-		speaker.Sound().Chime(speaker.ToneMute)
-		return
-	}
-	speaker.Sound().Chime(speaker.ToneUnmute)
+	speaker.Sound().Chime(speaker.MuteTone(config.Get().Microphone.MuteSound, muted))
 }
 
 // pollInterval is how often await looks while it waits.

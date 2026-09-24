@@ -63,6 +63,24 @@ func WakeTones() []config.Tone {
 	return []config.Tone{config.ToneNone, config.ToneChirp, config.ToneDing, config.ToneRise}
 }
 
+// MuteTones is what the mute switch can sound like, in the order they are offered.
+func MuteTones() []config.Tone {
+	return []config.Tone{
+		config.ToneNone, config.ToneMuteSwitch, config.ToneChirp, config.ToneDing, config.ToneRise,
+	}
+}
+
+// MuteTone is what t sounds like for the mute switch.
+func MuteTone(t config.Tone, muted bool) []Note {
+	if t == config.ToneMuteSwitch {
+		if muted {
+			return ToneMute
+		}
+		return ToneUnmute
+	}
+	return wakeTones[t]
+}
+
 // Chime plays a tone alongside whatever is playing rather than instead of it: pressing volume during
 // a reply should beep and leave the reply alone.
 func (d *Driver) Chime(notes []Note) {
