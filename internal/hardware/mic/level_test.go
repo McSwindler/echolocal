@@ -111,6 +111,23 @@ func peakOf(frame []int16) float64 {
 	return 20 * math.Log10(float64(peak)/fullScale)
 }
 
+func TestOneLoudFrameDoesNotTakeTheGainAway(t *testing.T) {
+	l := newLeveler()
+	talk(l, -65, -45, 30)
+	settled := l.gain
+
+	l.apply(speech(-3))
+	for range 5 {
+		l.apply(speech(-65))
+	}
+	if l.gain < settled*0.9 {
+		t.Errorf("one loud frame took the gain from %.1f dB to %.1f dB", 20*math.Log10(float64(settled)), 20*math.Log10(float64(l.gain)))
+	}
+	if got := levelOf(talk(l, -65, -45, 1)); math.Abs(got-targetDBFS) > 2 {
+		t.Errorf("speech after the loud frame came out at %.1f dBFS, want %.1f", got, targetDBFS)
+	}
+}
+
 func TestLevelerDoesNotClipPeakySpeech(t *testing.T) {
 	l := newLeveler()
 

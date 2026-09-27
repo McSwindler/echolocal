@@ -302,14 +302,15 @@ func (l *leveler) apply(frame []int16) {
 
 	// Whatever the average asked for, this frame does not get gain that would push its loudest sample
 	// into the ceiling. Smoothing cannot do this part: an onset arrives inside one frame.
+	gain := l.gain
 	if peak > 0 {
-		l.gain = min(l.gain, l.headroom/peak)
+		gain = min(gain, l.headroom/peak)
 	}
 
 	l.publish()
 
 	for i, s := range frame {
-		switch v := float32(s) * l.gain; {
+		switch v := float32(s) * gain; {
 		case v > fullScale-1:
 			frame[i] = fullScale - 1
 			l.clipped.Add(1)
