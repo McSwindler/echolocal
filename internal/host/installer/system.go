@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/ygelfand/echolocal/internal/android/services"
@@ -149,8 +151,8 @@ func disableVerity(r *run) (string, bool, error) {
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
-	if r.system().Empty() {
-		return "nothing on the system partition to disable", true, nil
+	if r.system().VerityOffset == 0 {
+		return "no verity metadata on this board", true, nil
 	}
 
 	dev, err := r.systemNode()
@@ -220,6 +222,27 @@ func patchSystem(r *run) (string, bool, error) {
 			return "", false, err
 		}
 		written = append(written, p.Path)
+	}
+
+	if did, err := r.setProps(at, layout); err != nil {
+		return "", false, err
+	} else if did != "" {
+		written = append(written, did)
+	}
+
+	for _, gated := range layout.Gate {
+		if _, err := r.patchInitRC(at,
+			func(s string) (string, []string) { return services.Gated(s, gated) },
+		); err != nil {
+			return "", false, err
+		}
+		written = append(written, gated+" gated")
+	}
+
+	if did, err := r.takeService(at, layout); err != nil {
+		return "", false, err
+	} else if did != "" {
+		written = append(written, did)
 	}
 
 	// init reads a service block once, at boot. The install has to start echod in the run that writes
@@ -471,4 +494,43 @@ func (r *run) systemNode() (string, error) {
 		return "", errUnknownSlot
 	}
 	return sysimg.Node(r.state.slot), nil
+}
+
+// setProps writes the layout's properties into the file that holds them, leaving the rest as it is.
+func (r *run) setProps(at string, layout sysimg.Layout) (string, error) {
+	if len(layout.Props) == 0 {
+		return "", nil
+	}
+	path := at + "/" + layout.PropsPath
+
+	current, err := r.d.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	keys := slices.Sorted(maps.Keys(layout.Props))
+	for _, key := range keys {
+		current = setProp(current, key, layout.Props[key])
+	}
+	if err := r.writeInPlace(path, current); err != nil {
+		return "", err
+	}
+	return layout.PropsPath, nil
+}
+
+// takeService replaces the rc file of the service echod is installed as, so init starts echod where
+// it would have started whatever the OS put there.
+func (r *run) takeService(at string, layout sysimg.Layout) (string, error) {
+	if layout.ServiceRC == "" {
+		return "", nil
+	}
+
+	b := r.board()
+	rc := fmt.Sprintf("service %s %s\n    class main\n    priority -20\n    user root\n    group root\n",
+		b.ServiceName, b.Service)
+
+	if err := r.writeInPlace(at+"/"+layout.ServiceRC, []byte(rc)); err != nil {
+		return "", err
+	}
+	return b.ServiceName, nil
 }

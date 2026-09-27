@@ -84,7 +84,7 @@ func newInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !state.Ready {
+			if !state.Ready && p.Boot.SHA256 != "" {
 				if cfg.BootImage, cfg.BootImageFrom, err = resolveBootImage(cmd.Context(), out, p, bootImage); err != nil {
 					return err
 				}

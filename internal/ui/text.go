@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image"
+	"strings"
 	"sync"
 
 	"golang.org/x/image/font"
@@ -269,4 +270,64 @@ func DrawTextIn(dst Surface, f *Font, r Rect, fg, bg theme.Color, s string) {
 func DrawTextRight(dst Surface, f *Font, r Rect, fg, bg theme.Color, s string) {
 	w, h := f.Measure(s)
 	DrawText(dst, f, r.X+r.W-w, r.Y+(r.H-h)/2, fg, bg, s)
+}
+
+// Wrap breaks a line at spaces to the width it has, into at most most lines. The last is cut with
+// an ellipsis where the rest will not fit, and a word longer than the width is cut as well.
+func Wrap(f *Font, says string, width, most int) []string {
+	if says == "" {
+		return nil
+	}
+	if w, _ := f.Measure(says); w <= width {
+		return []string{says}
+	}
+
+	out := make([]string, 0, most)
+	rest := says
+
+	for len(out) < most-1 {
+		cut := breaks(f, rest, width)
+		if cut <= 0 {
+			break
+		}
+
+		out = append(out, rest[:cut])
+		rest = strings.TrimLeft(rest[cut:], " ")
+
+		if w, _ := f.Measure(rest); w <= width {
+			break
+		}
+	}
+	return append(out, Fit(f, rest, width))
+}
+
+// breaks is how much of a line fits: the last space that leaves what is before it inside the width.
+func breaks(f *Font, says string, width int) int {
+	last := 0
+	for i, r := range says {
+		if r != ' ' {
+			continue
+		}
+		if w, _ := f.Measure(says[:i]); w > width {
+			break
+		}
+		last = i
+	}
+	return last
+}
+
+// Fit trims a line to the width it has, ending in an ellipsis.
+func Fit(f *Font, says string, width int) string {
+	if w, _ := f.Measure(says); w <= width {
+		return says
+	}
+
+	runes := []rune(says)
+	for len(runes) > 1 {
+		runes = runes[:len(runes)-1]
+		if w, _ := f.Measure(string(runes) + "…"); w <= width {
+			return string(runes) + "…"
+		}
+	}
+	return "…"
 }

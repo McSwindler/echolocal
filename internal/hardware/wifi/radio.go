@@ -9,6 +9,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/lib/hook"
+	"github.com/ygelfand/echolocal/internal/lib/wpa"
 	"github.com/ygelfand/echolocal/internal/service"
 )
 
@@ -27,6 +28,10 @@ type Radio struct {
 	mac  string
 	up   bool
 	ssid string
+
+	// configured is whether the supplicant has a network to join at all. Without one the radio is
+	// not coming up on its own, and the device says so rather than waiting for a person.
+	configured bool
 
 	// ctl is the control connection Run holds, for asking what the supplicant is doing.
 	ctl *Control
@@ -61,10 +66,19 @@ func (r *Radio) Startup() component.Progress {
 		p.Doing = "on " + r.ssid
 	case r.ssid != "":
 		p.Doing = "joining " + r.ssid
+	case !r.configured:
+		p.Failed, p.Doing = true, "no network set up"
 	default:
 		p.Doing = "looking for the network"
 	}
 	return p
+}
+
+// Configured reports whether the supplicant has a network to join.
+func (r *Radio) Configured() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.configured
 }
 
 // Network is the network the supplicant is on, empty when it is on none.
@@ -165,6 +179,12 @@ func (r *Radio) settle() {
 
 	if ctl == nil {
 		return
+	}
+
+	if known, err := wpa.Configured(socket{ctl}); err == nil {
+		r.mu.Lock()
+		r.configured = len(known) > 0
+		r.mu.Unlock()
 	}
 
 	s, err := ctl.Status()

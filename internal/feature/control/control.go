@@ -18,10 +18,7 @@ import (
 	"sync"
 	"time"
 
-	esphome "github.com/ygelfand/go-esphome-device"
-
 	"github.com/ygelfand/echolocal/internal/component"
-	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/service"
 )
 
@@ -34,9 +31,7 @@ func init() {
 const Socket = "@echod"
 
 type Control struct {
-	enable *esphome.Switch
-
-	// gate guards the listener, which the switch and the component's own shutdown both reach.
+	// gate guards the listener, which Run and the component's own shutdown both reach.
 	gate     sync.Mutex
 	listener net.Listener
 
@@ -52,60 +47,14 @@ var (
 
 func Get() *Control { once.Do(func() { shared = build() }); return shared }
 
-func build() *Control {
-	c := &Control{addr: Socket}
-
-	c.enable = &esphome.Switch{
-		Base: esphome.Base{
-			ObjectID: "control_socket",
-			Name:     "Control socket",
-			Icon:     "mdi:console-network",
-			Category: esphome.CategoryConfig,
-		},
-	}
-	c.enable.Set(Enabled())
-	c.enable.OnCommand = c.SetControl
-
-	return c
-}
+func build() *Control { return &Control{addr: Socket} }
 
 func (c *Control) Name() string { return "control" }
 
-func (c *Control) Entities() []esphome.Entity { return []esphome.Entity{c.enable} }
-
-// Enabled reports whether the socket is wanted. Off unless somebody has asked for it.
-func Enabled() bool { return config.Get().Diag.Control }
-
-// SetControl opens the socket or closes it. Home Assistant's switch comes here.
-func (c *Control) SetControl(on bool) {
-	c.enable.Set(on)
-
-	if err := config.Set().Diag().Control(on); err != nil {
-		slog.Error("saving the control setting failed", "err", err)
-		return
-	}
-
-	if !on {
-		c.down()
-		return
-	}
-	if err := c.up(); err != nil {
-		slog.Error("the control socket would not open", "err", err)
-	}
-}
-
-func (c *Control) Restore(cfg config.Config) {
-	c.enable.Set(cfg.Diag.Control)
-}
-
-// Run holds the socket for as long as it is wanted, and nothing at all when it is not.
+// Run holds the socket for the life of the process.
 func (c *Control) Run(ctx context.Context) error {
-	if Enabled() {
-		if err := c.up(); err != nil {
-			return err
-		}
-	} else {
-		slog.Info("the control socket is closed", "address", c.addr)
+	if err := c.up(); err != nil {
+		return err
 	}
 
 	<-ctx.Done()

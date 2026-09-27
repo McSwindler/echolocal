@@ -22,10 +22,12 @@ func approveFlash(ctx context.Context, out io.Writer, d *device.Device, state in
 		return false, errors.New("writing the boot partition needs confirmation: run this on a terminal, or pass --yes")
 	}
 
-	fmt.Fprintf(out, "\n%s\n", styleTitle.Render("This will overwrite the boot partition"))
+	fmt.Fprintf(out, "\n%s\n", styleTitle.Render("This takes the device over, and undoing it needs a reflash"))
 	fmt.Fprintf(out, "  device     %s (%s)\n", d.Serial(), state.Summary)
-	fmt.Fprintf(out, "  partition  %s\n", state.Partition)
-	fmt.Fprintf(out, "  image      %s\n", image)
+	if image != "" {
+		fmt.Fprintf(out, "  partition  %s\n", state.Partition)
+		fmt.Fprintf(out, "  image      %s\n", image)
+	}
 
 	return typed(ctx, out, "Type yes to continue", "yes")
 }

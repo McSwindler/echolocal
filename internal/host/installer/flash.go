@@ -134,6 +134,9 @@ func checkState(r *run) (string, bool, error) {
 // because the pairing is what matters: the right image on the wrong build is a device that boots
 // someone else's ramdisk against this system partition.
 func checkImage(r *run) (string, bool, error) {
+	if detail, skip := r.unflashed(); skip {
+		return detail, true, nil
+	}
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
@@ -177,6 +180,15 @@ func checkApproval(r *run) (string, bool, error) {
 func (r *run) done() (string, bool) {
 	if r.state.ready() {
 		return "already root and permissive", true
+	}
+	return "", false
+}
+
+// unflashed reports whether this board keeps the boot image it came with, which is every board whose
+// install is all on the system partition.
+func (r *run) unflashed() (string, bool) {
+	if r.cfg.Profile.Boot.SHA256 == "" {
+		return "this board keeps its own boot image", true
 	}
 	return "", false
 }
@@ -294,6 +306,9 @@ func bootRecovery(r *run) (string, bool, error) {
 // checkPartition resolves the target and refuses anything that is not the size a boot slot measures.
 // Writing a boot image into a partition of some other size is how a device stops booting.
 func checkPartition(r *run) (string, bool, error) {
+	if detail, skip := r.unflashed(); skip {
+		return detail, true, nil
+	}
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
@@ -337,6 +352,9 @@ func (r *run) partition() (string, error) {
 var errUnknownSlot = errors.New("device names no boot slot in ro.boot.slot_suffix")
 
 func writeImage(r *run) (string, bool, error) {
+	if detail, skip := r.unflashed(); skip {
+		return detail, true, nil
+	}
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}
@@ -360,6 +378,9 @@ func writeImage(r *run) (string, bool, error) {
 // verifyImage reads the partition back. This is the reason writing from recovery is defensible: the
 // bytes that will boot are hashed, rather than assumed to have landed.
 func verifyImage(r *run) (string, bool, error) {
+	if detail, skip := r.unflashed(); skip {
+		return detail, true, nil
+	}
 	if detail, skip := r.done(); skip {
 		return detail, true, nil
 	}

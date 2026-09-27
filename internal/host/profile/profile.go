@@ -25,6 +25,7 @@ var profiles = map[string]Profile{
 	board.Biscuit.Device:  biscuit,
 	board.Checkers.Device: checkers,
 	board.Cronos.Device:   cronos,
+	board.Rook.Device:     rook,
 }
 
 // Profile is one board's install.
@@ -43,6 +44,33 @@ type Profile struct {
 
 	// Hide are the Amazon packages an install hides, empty on a board with no package manager.
 	Hide []services.Package
+
+	// SupportedSDK is the ro.build.version.sdk this install was worked out against, and
+	// UnsupportedSDKReason what a device on another one is told. Both default to Fire OS 6.
+	SupportedSDK         string
+	UnsupportedSDKReason string
+}
+
+// Fire OS 6 is Android 7.1, which is what a profile that names no SDK of its own installs to.
+const (
+	fireOS6    = "25"
+	fireOS6Why = "want 25 (Fire OS 6); Fire OS 5 needs echoctl 0.0.6 or earlier"
+)
+
+// SDK is the ro.build.version.sdk this profile installs to.
+func (p Profile) SDK() string {
+	if p.SupportedSDK == "" {
+		return fireOS6
+	}
+	return p.SupportedSDK
+}
+
+// SDKRefusal is what a device on another one is told.
+func (p Profile) SDKRefusal() string {
+	if p.UnsupportedSDKReason == "" {
+		return fireOS6Why
+	}
+	return p.UnsupportedSDKReason
 }
 
 // For is the profile for what a device says it is.

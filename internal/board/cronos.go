@@ -9,6 +9,7 @@ var Cronos = Board{
 	Caps:          Panel | Wifi | Shutter,
 	PanelRotation: 270,
 	Keys:          map[uint16]Key{116: Mute},
+	MuteDir:       "/sys/devices/platform/gpio-privacy",
 
 	Service:     "/system/bin/surfaceflinger",
 	ServiceName: "surfaceflinger",

@@ -62,17 +62,26 @@ func ReadState(d *device.Device) (State, error) {
 	}
 	s.Service = s.Board.Service
 
-	link, err := d.IsSymlink(s.Service)
-	if err != nil {
-		return s, err
-	}
-	if link {
-		target, err := d.Shell("readlink " + s.Service)
+	// A board whose service names our binary has nothing to link: init runs it directly.
+	if s.Service == layout.Binary {
+		there, err := d.Exists(layout.Binary)
 		if err != nil {
 			return s, err
 		}
-		s.LinkTarget = strings.TrimSpace(target)
-		s.Installed = s.LinkTarget == layout.Binary
+		s.Installed = there
+	} else {
+		link, err := d.IsSymlink(s.Service)
+		if err != nil {
+			return s, err
+		}
+		if link {
+			target, err := d.Shell("readlink " + s.Service)
+			if err != nil {
+				return s, err
+			}
+			s.LinkTarget = strings.TrimSpace(target)
+			s.Installed = s.LinkTarget == layout.Binary
+		}
 	}
 
 	if s.Installed {
@@ -84,9 +93,11 @@ func ReadState(d *device.Device) (State, error) {
 		}
 	}
 
-	if s.Name, err = ReadName(d); err != nil {
+	name, err := ReadName(d)
+	if err != nil {
 		return s, err
 	}
+	s.Name = name
 	key, err := ReadKey(d)
 	if err != nil {
 		return s, err

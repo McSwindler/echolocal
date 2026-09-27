@@ -10,7 +10,8 @@ var Checkers = Board{
 	PanelRotation: 270,
 
 	// The mute button reports KEY_POWER, on a node of its own called "gating".
-	Keys: map[uint16]Key{116: Mute},
+	Keys:    map[uint16]Key{116: Mute},
+	MuteDir: "/sys/devices/platform/amazon-gating",
 
 	// surfaceflinger holds /dev/graphics/fb0.
 	Service:     "/system/bin/surfaceflinger",

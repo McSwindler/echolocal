@@ -256,3 +256,24 @@ func blockHas(rest []string, keyword string) bool {
 	}
 	return false
 }
+
+// Gated stops a service starting with its class, by adding disabled to its block. A service already
+// carrying it is left alone, so this is safe to run again.
+func Gated(rc, name string) (string, []string) {
+	lines := strings.Split(rc, "\n")
+
+	out := make([]string, 0, len(lines)+1)
+	var changed []string
+
+	for i, line := range lines {
+		out = append(out, line)
+
+		at, ok := serviceName(line)
+		if !ok || at != name || blockHas(lines[i+1:], "disabled") {
+			continue
+		}
+		out = append(out, "    disabled")
+		changed = append(changed, name+" disabled")
+	}
+	return strings.Join(out, "\n"), changed
+}

@@ -81,6 +81,9 @@ type Board struct {
 	// Keys is what this board's buttons report, where they are not the usual codes.
 	Keys map[uint16]Key
 
+	// MuteDir is the driver that cuts the microphones, which publishes state and enable.
+	MuteDir string
+
 	// PanelRotation turns the picture the right way up, in degrees from the framebuffer's own
 	// orientation. Only somebody looking at the device can say: a capture reads back through the
 	// same rotation it was drawn with, so it looks correct either way.

@@ -10,6 +10,9 @@ language.name: English
 # The screen a device nobody has added yet holds up, beside the code to scan.
 onboard.title: Add me to Home Assistant
 
+# What it says instead when there is no network to be added over.
+onboard.network: Finish the installer, or run echolocal wifi
+
 # The side of the picture the drawer is pulled in from.
 edge.left: Left
 edge.right: Right

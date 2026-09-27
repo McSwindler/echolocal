@@ -1,8 +1,6 @@
 package player
 
 import (
-	"strings"
-
 	"github.com/ygelfand/echolocal/internal/feature/media"
 	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -25,7 +23,7 @@ func says(m widget.Metrics, now media.Now, width int) lines {
 		head:    m.Title,
 		under:   m.Value,
 		gap:     m.Pad / 2,
-		title:   wrap(m.Title, heading(now), width, titleLines),
+		title:   ui.Wrap(m.Title, heading(now), width, titleLines),
 		credits: credits(m.Value, now, width),
 	}
 }
@@ -64,75 +62,16 @@ func credits(f *ui.Font, now media.Now, width int) []string {
 	case now.Artist == "" && now.Album == "":
 		return nil
 	case now.Artist == "":
-		return wrap(f, now.Album, width, creditLines)
+		return ui.Wrap(f, now.Album, width, creditLines)
 	case now.Album == "":
-		return wrap(f, now.Artist, width, creditLines)
+		return ui.Wrap(f, now.Artist, width, creditLines)
 	}
 
 	both := now.Artist + " · " + now.Album
 	if w, _ := f.Measure(both); w <= width {
 		return []string{both}
 	}
-	return []string{fit(f, now.Artist, width), fit(f, now.Album, width)}
-}
-
-// wrap breaks a line at spaces to the width it has, into at most so many lines.
-func wrap(f *ui.Font, says string, width, most int) []string {
-	if says == "" {
-		return nil
-	}
-	if w, _ := f.Measure(says); w <= width {
-		return []string{says}
-	}
-
-	out := make([]string, 0, most)
-	rest := says
-
-	for len(out) < most-1 {
-		cut := breaks(f, rest, width)
-		if cut <= 0 {
-			break
-		}
-
-		out = append(out, rest[:cut])
-		rest = strings.TrimLeft(rest[cut:], " ")
-
-		if w, _ := f.Measure(rest); w <= width {
-			break
-		}
-	}
-	return append(out, fit(f, rest, width))
-}
-
-// breaks is how much of a line fits: the last space that leaves what is before it inside the width.
-func breaks(f *ui.Font, says string, width int) int {
-	last := 0
-	for i, r := range says {
-		if r != ' ' {
-			continue
-		}
-		if w, _ := f.Measure(says[:i]); w > width {
-			break
-		}
-		last = i
-	}
-	return last
-}
-
-// fit trims a line to the width it has, ending in an ellipsis.
-func fit(f *ui.Font, says string, width int) string {
-	if w, _ := f.Measure(says); w <= width {
-		return says
-	}
-
-	runes := []rune(says)
-	for len(runes) > 1 {
-		runes = runes[:len(runes)-1]
-		if w, _ := f.Measure(string(runes) + "…"); w <= width {
-			return string(runes) + "…"
-		}
-	}
-	return "…"
+	return []string{ui.Fit(f, now.Artist, width), ui.Fit(f, now.Album, width)}
 }
 
 func heading(now media.Now) string {

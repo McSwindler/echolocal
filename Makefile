@@ -191,7 +191,8 @@ install-echod: ## Install echod into /system/app/echod, built for whatever board
 		$(ADB) push "$$bin" $(ECHOD_DIR)/echod >/dev/null; \
 		$(ADB) shell "chmod 755 $(ECHOD_DIR)/echod; \
 			rm -f $(STATE_DIR)/updating; setprop echolocal.trial ''; setprop echolocal.rolledback ''; \
-			[ -L /system/bin/$$service ] && setprop ctl.start $$service; ls -lZ $(ECHOD_DIR)/echod"
+			[ \"$$binary\" = $(ECHOD_DIR)/echod ] || [ -L \"$$binary\" ] && setprop ctl.start $$service; \
+			ls -lZ $(ECHOD_DIR)/echod"
 
 .PHONY: install-service
 install-service: install-echod ## Take over the board's service so init starts echod

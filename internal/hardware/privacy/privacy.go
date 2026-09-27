@@ -10,6 +10,8 @@ package privacy
 import (
 	"os"
 	"time"
+
+	"github.com/ygelfand/echolocal/internal/component"
 )
 
 // Mute is the hardware microphone cut.
@@ -35,8 +37,8 @@ type LED interface {
 
 // Microphone is the mute.
 func Microphone() (Mute, error) {
-	if present(gatingState) {
-		return gating{}, nil
+	if dir := component.Board().MuteDir; dir != "" {
+		return gating{dir}, nil
 	}
 	if present(state) {
 		return driver{}, nil

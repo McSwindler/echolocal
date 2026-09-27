@@ -18,6 +18,7 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/hardware/wifi"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
 	"github.com/ygelfand/echolocal/internal/service"
 )
@@ -49,11 +50,13 @@ func (c *Client) Name() string { return "dhcp" }
 
 // Startup is not ready until the device has an address.
 func (c *Client) Startup() component.Progress {
-	lease := c.Lease()
-	if lease == nil {
-		return component.Progress{Doing: "asking for an address"}
+	if lease := c.Lease(); lease != nil {
+		return component.Progress{Done: true, Doing: lease.Address.IP.String()}
 	}
-	return component.Progress{Done: true, Doing: lease.Address.IP.String()}
+	if component.Board().Has(board.Wifi) && !wifi.Get().Configured() {
+		return component.Progress{Failed: true, Doing: "no network"}
+	}
+	return component.Progress{Doing: "asking for an address"}
 }
 
 // Lease is the address currently held, or nil when there is none.

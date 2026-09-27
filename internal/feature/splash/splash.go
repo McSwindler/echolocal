@@ -132,17 +132,26 @@ func (s *Splash) onboard(ctx context.Context) error {
 	s.hold.Release()
 	s.hold = screen.Get().Claim(screen.PrioritySetup)
 
-	key := pairing()
-	s.hold.Show(func(p *screen.Panel) error {
-		drawOnboard(p, theme.Get().Current(), key)
-		return nil
-	})
 	slog.Info("waiting to be added to home assistant")
 
 	t := time.NewTicker(look)
 	defer t.Stop()
 
+	said := "\x00"
 	for !api.Adopted() {
+		key := pairing()
+		if !networked() {
+			key = ""
+		}
+
+		if key != said {
+			said = key
+			s.hold.Show(func(p *screen.Panel) error {
+				drawOnboard(p, theme.Get().Current(), key)
+				return nil
+			})
+		}
+
 		select {
 		case <-ctx.Done():
 			return nil

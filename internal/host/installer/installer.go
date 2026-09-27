@@ -179,16 +179,15 @@ func checkDevice(r *run) (string, bool, error) {
 	}
 	// A device this build has no profile for is refused here, before anything is written to it.
 	model, _ := r.d.Getprop("ro.product.device")
-	if _, err := profile.For(model); err != nil {
+	p, err := profile.For(model)
+	if err != nil {
 		return "", false, err
 	}
 
-	// Fire OS 6 is Android 7.1, SDK 25. Fire OS 5 devices are SDK 22 and are not installed to any more:
-	// the image, the partition layout and the binary all differ, and an older release still does it.
-	//
-	// TODO: once other devices exist, work out their SDK requirements.
-	if sdk != "25" {
-		return "", false, fmt.Errorf("device reports SDK %s, want 25 (Fire OS 6); Fire OS 5 needs echoctl 0.0.6 or earlier", sdk)
+	// The image, the partition layout and the binary all differ between releases of the OS a board
+	// runs, so an install only goes onto the one it was worked out against.
+	if sdk != p.SDK() {
+		return "", false, fmt.Errorf("device reports SDK %s, %s", sdk, p.SDKRefusal())
 	}
 	return fmt.Sprintf("%s, SDK %s, %s", model, sdk, r.d.Serial()), false, nil
 }
@@ -252,6 +251,9 @@ func clearTrial(r *run) error {
 // link points at.
 func takeOverService(r *run) (string, bool, error) {
 	service := r.board().Service
+	if service == layout.Binary {
+		return "init starts echod itself", true, nil
+	}
 
 	if current, err := r.d.Shell("readlink " + service); err == nil {
 		if strings.TrimSpace(current) == layout.Binary {

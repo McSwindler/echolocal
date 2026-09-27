@@ -23,11 +23,22 @@ type Layout struct {
 
 	// OTA is the property that stops Fire OS taking an update over this install.
 	OTAKey, OTAValue string
+
+	// Props are properties set in PropsPath.
+	PropsPath string
+	Props     map[string]string
+
+	// Gate are the init services stopped from starting.
+	Gate []string
+
+	// ServiceRC is the rc file replaced with the definition that starts echod.
+	ServiceRC string
 }
 
 // Empty reports whether the system partition needs nothing written to it.
 func (l Layout) Empty() bool {
-	return l.VerityOffset == 0 && len(l.Patches) == 0 && l.Adbd.Path == ""
+	return l.VerityOffset == 0 && len(l.Patches) == 0 && l.Adbd.Path == "" &&
+		len(l.Props) == 0 && len(l.Gate) == 0 && l.ServiceRC == ""
 }
 
 // BinPatch is bytes overwritten in place at a fixed offset in a file. Patching rather than replacing
@@ -59,3 +70,16 @@ var (
 		OTAValue: OTAValue,
 	}
 )
+
+// Rook is the 1st-generation Echo Spot's system partition, which holds LineageOS.
+var Rook = Layout{
+	PropsPath: "default.prop",
+	Props: map[string]string{
+		"ro.secure":              "0",
+		"ro.adb.secure":          "0",
+		"persist.sys.usb.config": "adb",
+	},
+
+	Gate:      []string{"surfaceflinger", "audioserver"},
+	ServiceRC: "system/etc/init/hw/init.zygote32.rc",
+}

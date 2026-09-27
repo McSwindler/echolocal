@@ -5,17 +5,14 @@ import (
 	"time"
 )
 
-const (
-	gatingDir   = "/sys/devices/platform/amazon-gating"
-	gatingState = gatingDir + "/state"
-	gatingCut   = gatingDir + "/enable"
-)
-
 // Writing 1 to enable cuts, writing 0 does nothing, and only the button releases. Measured on
 // checkers.
-type gating struct{}
+type gating struct{ dir string }
 
-func (gating) Get() (bool, error) { return reads(gatingState, "1") }
+func (g gating) state() string { return g.dir + "/state" }
+func (g gating) cut() string   { return g.dir + "/enable" }
+
+func (g gating) Get() (bool, error) { return reads(g.state(), "1") }
 
 func (gating) HardwareToggles() bool { return true }
 
@@ -28,7 +25,7 @@ func (g gating) Set(muted bool) error {
 	case is == muted:
 		return nil
 	case muted:
-		return write(gatingCut, "1")
+		return write(g.cut(), "1")
 	}
 	return errors.New("releasing the microphones needs the mute button")
 }

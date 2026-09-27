@@ -54,6 +54,7 @@ func TestOnlyBoardsReadOffHardwareCanMatch(t *testing.T) {
 		"biscuit":  "biscuit_puffin",
 		"checkers": "checkers",
 		"cronos":   "cronos",
+		"rook":     "rook",
 	}
 
 	for _, b := range All {
@@ -92,7 +93,9 @@ func TestABoardNobodyHasMetClaimsNothing(t *testing.T) {
 	if Biscuit.ServiceName == "" {
 		t.Error("biscuit names no service for echod to be installed as")
 	}
-	met := map[string]bool{Biscuit.Device: true, Checkers.Device: true, Cronos.Device: true}
+	met := map[string]bool{
+		Biscuit.Device: true, Checkers.Device: true, Cronos.Device: true, Rook.Device: true,
+	}
 
 	for _, b := range All {
 		if met[b.Device] {

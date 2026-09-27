@@ -9,9 +9,6 @@ type Diag struct {
 
 	RemoteADB bool `json:"remote_adb"`
 
-	// Control opens the control socket, which drives the running device from a terminal on it.
-	Control bool `json:"control"`
-
 	// InsecureTLS stops certificates being checked on anything the device downloads.
 	InsecureTLS bool `json:"insecure_tls"`
 
@@ -38,10 +35,6 @@ func (w DiagWriter) Interval(v int) error {
 
 func (w DiagWriter) RemoteADB(v bool) error {
 	return w.st.Update(func(c *Config) { c.Diag.RemoteADB = v })
-}
-
-func (w DiagWriter) Control(v bool) error {
-	return w.st.Update(func(c *Config) { c.Diag.Control = v })
 }
 
 func (w DiagWriter) InsecureTLS(v bool) error {

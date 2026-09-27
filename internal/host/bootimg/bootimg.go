@@ -73,6 +73,9 @@ type Image struct {
 // assets to the tag it is building, and these have to outlive any particular version of echoctl.
 const Tag = "boot-images"
 
+// downloads is where that tag's assets are served from.
+const downloads = "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/"
+
 // Biscuit is the boot image for a 2nd-generation Echo Dot.
 //
 // Its ramdisk keeps MTK section headers, so anything unpacking it has to skip the 512-byte ROOTFS
@@ -85,31 +88,31 @@ var Biscuit = Image{
 	Device:  "biscuit_puffin",
 
 	File: "boot/echolocal-boot-biscuit.img",
-	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-biscuit.img",
+	URL:  downloads + "echolocal-boot-biscuit.img",
 }
 
 // Checkers is the boot image for a 1st-generation Echo Show 5.
 var Checkers = Image{
-	SHA256:  "ec9f90c6dad68bb090241de531025bf7dddea57cde4ef8545bba711598d1463c",
+	SHA256:  "00afadfcaea1eb2ccfded4481a8d1c619e0f0dfac0edfdf0907a76814de893cd",
 	Size:    8210432,
 	Cmdline: "androidboot.selinux=permissive",
 	Build:   13222531716,
 	Device:  "checkers",
 
 	File: "boot/echolocal-boot-checkers.img",
-	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-checkers.img",
+	URL:  downloads + "echolocal-boot-checkers.img",
 }
 
 // Cronos is the boot image for a 2nd-generation Echo Show 5.
 var Cronos = Image{
-	SHA256:  "d0731483ba293c93cf1a8a8f896d4b76dddcfdcaa634f6e9a249390fad28cc49",
+	SHA256:  "f203d81891a00491ee6473b09a029bd18a21c22e6e6f4abce22da82db60cf08e",
 	Size:    8691712,
 	Cmdline: "androidboot.selinux=permissive",
 	Build:   13222531716,
 	Device:  "cronos",
 
 	File: "boot/echolocal-boot-cronos.img",
-	URL:  "https://github.com/ygelfand/echolocal/releases/download/" + Tag + "/echolocal-boot-cronos.img",
+	URL:  downloads + "echolocal-boot-cronos.img",
 }
 
 // Images is every boot image this build knows, which is what `make boot-images` publishes and what

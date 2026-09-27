@@ -114,7 +114,7 @@ func (v *screen) drawChip(s ui.Surface, arrow, whole ui.Rect, m widget.Metrics, 
 
 	at := ui.Rect{X: right - side, Y: arrow.Y + (arrow.H-side)/2, W: side, H: side}
 
-	named := fit(m.Hint, media.Get().Named(), whole.W/3)
+	named := ui.Fit(m.Hint, media.Get().Named(), whole.W/3)
 	if named != "" {
 		w, _ := m.Hint.Measure(named)
 		at.X -= w + m.Pad/2

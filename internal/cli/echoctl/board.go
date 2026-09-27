@@ -42,14 +42,15 @@ func newBoardCmd() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			if sh {
-				fmt.Fprintf(out, "codename=%s\ndevice=%s\nservice=%s\nlabel=%s\n",
-					b.Codename, device, b.ServiceName, b.StockLabel)
+				fmt.Fprintf(out, "codename=%s\ndevice=%s\nservice=%s\nbinary=%s\nlabel=%s\n",
+					b.Codename, device, b.ServiceName, b.Service, b.StockLabel)
 				return nil
 			}
 
 			fmt.Fprintf(out, "  %s %s\n", styleKey.Render("board"), b.Codename)
 			fmt.Fprintf(out, "  %s %s\n", styleKey.Render("device"), device)
 			fmt.Fprintf(out, "  %s %s\n", styleKey.Render("service"), b.ServiceName)
+			fmt.Fprintf(out, "  %s %s\n", styleKey.Render("binary"), b.Service)
 			fmt.Fprintf(out, "  %s %s\n", styleKey.Render("label"), b.StockLabel)
 			return nil
 		},

@@ -3,6 +3,8 @@ package installer
 import (
 	"strings"
 	"testing"
+
+	"github.com/ygelfand/echolocal/internal/host/bootimg"
 )
 
 // Everything that writes is skipped on a device that is ready, which is what makes the stage safe to
@@ -73,11 +75,18 @@ func TestNothingIsWrittenWithoutApproval(t *testing.T) {
 	}
 }
 
-// A stage with nothing to write refuses rather than writing whatever it was handed.
+// A board that flashes and was handed no bytes refuses, rather than writing whatever it was given.
+// One that keeps its own boot image skips instead: there is nothing to write and nothing wrong.
 func TestCheckImageRefusesAnEmptyOne(t *testing.T) {
-	r := &run{state: state{device: "biscuit", build: "272.6.8.0_user_680767620"}}
+	flashes := &run{state: state{device: "biscuit", build: "272.6.8.0_user_680767620"}}
+	flashes.cfg.Profile.Boot = bootimg.Biscuit
 
-	if _, _, err := checkImage(r); err == nil {
+	if _, _, err := checkImage(flashes); err == nil {
 		t.Error("accepted an empty image")
+	}
+
+	keeps := &run{state: state{device: "rook"}}
+	if _, skip, err := checkImage(keeps); err != nil || !skip {
+		t.Errorf("board with no image of its own: skip=%t err=%v, want skipped with no error", skip, err)
 	}
 }
