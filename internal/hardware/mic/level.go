@@ -92,6 +92,9 @@ type leveler struct {
 	least atomic.Uint32
 	quiet atomic.Int32
 
+	// sounding is whether the device is making a sound, set from outside like the two above.
+	sounding bool
+
 	// peak is the most the level has reached since somebody asked, for something sampling far more slowly
 	// than the level moves. Only the reader writes it; asking clears it.
 	peak atomic.Uint32
@@ -167,6 +170,10 @@ func (l *leveler) atGain(db int) { l.least.Store(math.Float32bits(quietest(db)))
 // atSensitivity sets how far over the floor counts as something happening.
 func (l *leveler) atSensitivity(db int) { l.quiet.Store(int32(db)) }
 
+// atPlayback tells the leveler the device is making a sound, which stops both the gain and the floors
+// following it.
+func (l *leveler) atPlayback(on bool) { l.sounding = on }
+
 const fullScale = 32768
 
 func abs(s int16) int32 {
@@ -202,10 +209,13 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 	l.bandRMS = float32(math.Sqrt(band / float64(len(frame))))
 
 	// Follow the room, quickly down and slowly up, never below one sample of quantisation. Both bands
-	// track their own, since a floor from the wrong band is not a floor.
-	least := float32(math.Float32frombits(l.least.Load()))
-	l.floor = follow(l.floor, rms, l.floorDown, l.floorUp, least)
-	l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	// track their own, since a floor from the wrong band is not a floor. The device's own sound is not
+	// the room: left to follow it, the floors climb to what it is playing and stay there.
+	if !l.sounding {
+		least := float32(math.Float32frombits(l.least.Load()))
+		l.floor = follow(l.floor, rms, l.floorDown, l.floorUp, least)
+		l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	}
 
 	l.publishLevel(l.bandRMS)
 	return rms, peak
@@ -289,8 +299,10 @@ func (l *leveler) apply(frame []int16) {
 	}
 	rms, peak := l.observe(frame)
 
-	// Silence says nothing about how loud speech is, so the gain is left where speech left it.
-	if rms > l.floor*l.overFloor {
+	// Silence says nothing about how loud speech is, so the gain is left where speech left it. Neither
+	// does the device's own sound: measured on this leveler, a frame carrying it drives the gain from
+	// +22 dB to 0 within three seconds, and a word said over it arrives 22 dB short.
+	if !l.sounding && rms > l.floor*l.overFloor {
 		want := min(max(l.target/rms, 1), l.ceiling)
 
 		step := l.rise

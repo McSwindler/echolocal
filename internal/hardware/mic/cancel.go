@@ -2,6 +2,7 @@ package mic
 
 import (
 	"log/slog"
+	"math"
 	"sync/atomic"
 
 	"github.com/ygelfand/echolocal/internal/lib/aec"
@@ -40,8 +41,7 @@ const refHold = Rate / 4
 type canceller struct {
 	filter *aec.Canceller
 
-	// ref and mono are reused every frame; decoding into them keeps the audio path free of allocation.
-	ref  []int16
+	// mono is reused every frame; copying into it keeps the audio path free of allocation.
 	mono []int16
 
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
@@ -53,8 +53,8 @@ type canceller struct {
 	// active says whether the last frame had playback in it, which is when any of this happened.
 	active atomic.Bool
 
-	// hold counts down the samples still to filter after the loopback went quiet. Reader-only.
-	hold int
+	refE, micE float64
+	blocks     int
 }
 
 func newCanceller() *canceller {
@@ -67,39 +67,32 @@ func newCanceller() *canceller {
 	return &canceller{filter: f}
 }
 
-// apply returns the center microphone with the echo removed, or nil when there is nothing playing and
-// the caller should use the mix it already has.
-func (c *canceller) apply(raw []byte, mics [][]int16) []int16 {
-	n := len(mics[CenterMic])
-	if cap(c.ref) < n {
-		c.ref = make([]int16, n)
+// idle is the frame having no playback in it. The filter keeps what it learned: the room has not
+// changed just because the reply ended, so the next one starts converged rather than from nothing.
+func (c *canceller) idle() {
+	if c.active.Swap(false) {
+		// ERLE cannot exceed how far the echo stood above the rest of the microphone.
+		slog.Info("echo cancellation idle",
+			"best_db", float64(c.best.Load())/1000, "last_db", float64(c.erle.Load())/1000,
+			"ref_dbfs", meanDBFS(c.refE, c.blocks), "mic_dbfs", meanDBFS(c.micE, c.blocks),
+			"seconds", math.Round(float64(c.blocks)*float64(FrameSamples)/Rate*10)/10)
+		c.erle.Store(0)
+		c.best.Store(0)
+		c.refE, c.micE, c.blocks = 0, 0, 0
 	}
-	c.ref = c.ref[:n]
-	referenceInto(raw, c.ref)
+}
 
-	switch {
-	case playing(c.ref):
-		c.hold = refHold
-	case c.hold > 0:
-		// Still inside the tail of what just played.
-		c.hold -= n
-	default:
-		// Nothing to cancel. The filter keeps what it learned: the room has not changed just because
-		// the reply ended, so the next one starts converged rather than from nothing.
-		if c.active.Swap(false) {
-			slog.Info("echo cancellation idle",
-				"best_db", float64(c.best.Load())/1000, "last_db", float64(c.erle.Load())/1000)
-			c.erle.Store(0)
-			c.best.Store(0)
-		}
-		return nil
-	}
-
+// apply returns the center microphone with the echo removed, for a frame the caller has already found
+// playback in.
+func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if !c.active.Swap(true) {
 		slog.Info("echo cancellation running", "taps", cancelTaps)
 	}
+	c.refE += power(ref)
+	c.micE += power(mics[CenterMic])
+	c.blocks++
 
-	out, err := c.filter.Process(mics[CenterMic], c.ref)
+	out, err := c.filter.Process(mics[CenterMic], ref)
 	if err != nil {
 		slog.Error("echo cancellation failed", "err", err)
 		return nil
@@ -119,13 +112,49 @@ func (c *canceller) apply(raw []byte, mics [][]int16) []int16 {
 	return c.mono
 }
 
+// sounding decodes the loopback and reports whether the device is making a sound, counting the tail
+// after it goes quiet. Everything the microphones learn from the room is held still while it is true:
+// the echo is not the room, and neither the filter nor the leveler has any way to tell from the audio.
+func (s *Source) sounding(raw []byte, n int) bool {
+	if cap(s.ref) < n {
+		s.ref = make([]int16, n)
+	}
+	s.ref = s.ref[:n]
+	referenceInto(raw, s.ref)
+
+	switch {
+	case playing(s.ref):
+		s.hold = refHold
+	case s.hold > 0:
+		s.hold -= n
+	default:
+		return false
+	}
+	return true
+}
+
 // playing reports whether the loopback carries anything.
 func playing(ref []int16) bool {
+	return len(ref) > 0 && power(ref) > refQuiet
+}
+
+func meanDBFS(energy float64, blocks int) float64 {
+	if blocks == 0 || energy <= 0 {
+		return -120
+	}
+	return math.Round(10*math.Log10(energy/float64(blocks)/(32768*32768))*10) / 10
+}
+
+// power is the mean square per sample, at int16 scale.
+func power(s []int16) float64 {
 	var sum float64
-	for _, v := range ref {
+	for _, v := range s {
 		sum += float64(v) * float64(v)
 	}
-	return len(ref) > 0 && sum/float64(len(ref)) > refQuiet
+	if len(s) == 0 {
+		return 0
+	}
+	return sum / float64(len(s))
 }
 
 // referenceInto decodes ch7, the left half of the playback loopback, into dst. ch8 is left alone: on
