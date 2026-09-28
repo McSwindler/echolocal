@@ -82,6 +82,11 @@ type Source struct {
 	cancel     *canceller
 	cancelling bool
 
+	// ref is the decoded loopback and hold the samples still counted as sounding after it goes quiet.
+	// Reader-only, and read whatever the cancelling switch says.
+	ref  []int16
+	hold int
+
 	// leveler and wasLeveling belong to the reader alone; leveling is the switch, which anything may
 	// set.
 	leveler     *leveler
@@ -383,9 +388,17 @@ func (s *Source) broadcast(raw []byte) {
 	// While something is playing, the echo cancelled center microphone replaces the mix. It has to be
 	// one fixed microphone: the filter learns a single acoustic path, and the beamformer would steer at
 	// the loudest thing in the room, which during playback is the speaker being cancelled.
+	sounding := s.sounding(raw, len(mics[CenterMic]))
+	s.leveler.atPlayback(sounding)
+
 	if s.cancelling && s.cancel != nil {
-		if cancelled := s.cancel.apply(raw, mics); cancelled != nil {
-			frame = cancelled
+		switch {
+		case sounding:
+			if cancelled := s.cancel.apply(s.ref, mics); cancelled != nil {
+				frame = cancelled
+			}
+		default:
+			s.cancel.idle()
 		}
 	}
 

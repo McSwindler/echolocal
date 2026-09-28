@@ -51,6 +51,106 @@ func TestLevelerReachesTheTarget(t *testing.T) {
 	}
 }
 
+// A word said over the device's own sound has to reach a wake word model at the level it would in a
+// quiet room. Left to follow the echo, the gain reaches zero within three seconds and the word arrives
+// 22 dB short, which is the difference between speaking and shouting.
+func TestLevelerHoldsItsGainUnderPlayback(t *testing.T) {
+	const voice = -45
+
+	quiet := newLeveler()
+	talk(quiet, -65, voice, 30)
+	was := 20 * math.Log10(float64(quiet.gain))
+
+	for _, echo := range []float64{-30, -24, -18} {
+		for _, seconds := range []float64{0.5, 1, 3, 10} {
+			l := newLeveler()
+			talk(l, -65, voice, 30)
+
+			l.atPlayback(true)
+			for range int(seconds * Rate / FrameSamples) {
+				l.apply(speech(echo))
+			}
+			now := 20 * math.Log10(float64(l.gain))
+
+			heard := make([]int16, FrameSamples)
+			copy(heard, speech(voice))
+			l.apply(heard)
+
+			if short := was - now; short > 1 {
+				t.Errorf("echo %+.0f dBFS for %.1fs: gain %+.1f -> %+.1f dB, voice reaches %.1f dBFS, short by %.1f",
+					echo, seconds, was, now, levelOf(heard), short)
+			}
+		}
+	}
+}
+
+// Music runs long enough for the floor to follow it up, which is the part an alarm never reaches. A
+// floor sitting on the music is above every voice in the room, and the gate over it never opens again.
+func TestLevelerHoldsItsFloorUnderMusic(t *testing.T) {
+	const voice = -45
+
+	for _, music := range []float64{-30, -24, -18} {
+		for _, seconds := range []float64{3, 30, 120} {
+			l := newLeveler()
+			talk(l, -65, voice, 30)
+			was := 20 * math.Log10(float64(l.floor) / fullScale)
+
+			l.atPlayback(true)
+			for range int(seconds * Rate / FrameSamples) {
+				l.apply(speech(music))
+			}
+
+			if now := 20 * math.Log10(float64(l.floor) / fullScale); now-was > 1 {
+				t.Errorf("music %+.0f dBFS for %.0fs: floor %.1f -> %.1f dBFS, a voice at %d is %.1f under it",
+					music, seconds, was, now, voice, now-voice)
+			}
+		}
+	}
+}
+
+// The first thing said after the device stops is the one that has to be heard. A gain that followed the
+// playback down only climbs back while somebody talks, so the utterance paying for the recovery is the
+// one that needed it.
+func TestLevelerIsReadyWhenPlaybackStops(t *testing.T) {
+	const voice = -45
+
+	for _, quiet := range []bool{true, false} {
+		l := newLeveler()
+		talk(l, -65, voice, 30)
+		was := 20 * math.Log10(float64(l.gain))
+
+		l.atPlayback(true)
+		for range int(30 * Rate / FrameSamples) {
+			l.apply(speech(-18))
+		}
+		l.atPlayback(false)
+
+		what := "someone talking"
+		if quiet {
+			what = "an empty room"
+		}
+
+		for _, after := range []float64{0, 1, 5, 15, 30} {
+			if quiet {
+				for range int(after * Rate / FrameSamples) {
+					l.apply(speech(-65))
+				}
+			} else {
+				talk(l, -65, voice, after)
+			}
+
+			heard := make([]int16, FrameSamples)
+			copy(heard, speech(voice))
+			l.apply(heard)
+
+			if now := 20 * math.Log10(float64(l.gain)); was-now > 1 {
+				t.Errorf("%s, +%.0fs after playback: gain %+.1f -> %+.1f dB, voice reaches %.1f dBFS",
+					what, after, was, now, levelOf(heard))
+			}
+		}
+	}
+}
+
 // The ceiling has to hold, or a distant talker in a quiet room turns the room up instead.
 func TestLevelerStopsAtTheCeiling(t *testing.T) {
 	l := newLeveler()
