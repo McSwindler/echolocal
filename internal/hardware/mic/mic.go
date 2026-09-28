@@ -340,6 +340,8 @@ func (s *Source) Run(ctx context.Context) error {
 	report := time.NewTicker(dropReport)
 	defer report.Stop()
 
+	// An ALSA read can return short of a period, and the next read carries the rest.
+	filled := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil
@@ -351,17 +353,22 @@ func (s *Source) Run(ctx context.Context) error {
 		default:
 		}
 
-		n, err := pcm.Read(raw)
+		n, err := pcm.Read(raw[filled:])
 		if err != nil {
 			if errors.Is(err, alsa.ErrOverrun) {
 				if overruns++; overruns == 1 || overruns%100 == 0 {
 					slog.Warn("capture overrun", "times", overruns)
 				}
+				filled = 0
 				continue
 			}
 			return err
 		}
-		s.broadcast(raw[:n])
+		if filled += n; filled < len(raw) {
+			continue
+		}
+		s.broadcast(raw)
+		filled = 0
 	}
 }
 
