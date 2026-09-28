@@ -38,8 +38,6 @@ func TestBiscuitColor(t *testing.T) {
 	}
 }
 
-// A board nobody has decoded says so rather than guessing at black or white, which is biscuit's
-// answer and not necessarily anybody else's set of answers at all.
 func TestAnUndecodedBoardReportsUnknown(t *testing.T) {
 	idme := func(string) string { return "whatever some other board writes here" }
 	if got := Crown.Color(idme); got != ColorUnknown {
@@ -47,9 +45,7 @@ func TestAnUndecodedBoardReportsUnknown(t *testing.T) {
 	}
 }
 
-// A board with no Device recorded must never match, or an install would be aimed at it on the
-// strength of a typed codename.
-func TestOnlyBoardsReadOffHardwareCanMatch(t *testing.T) {
+func TestOnlyBoardsWithADeviceCanMatch(t *testing.T) {
 	read := map[string]string{
 		"biscuit":  "biscuit_puffin",
 		"checkers": "checkers",
@@ -61,51 +57,52 @@ func TestOnlyBoardsReadOffHardwareCanMatch(t *testing.T) {
 		if b.Device == "" {
 			continue
 		}
-		if want, ok := read[b.Codename]; !ok || b.Device != want {
-			t.Errorf("%s carries a ro.product.device of %q; has one actually been read off one?", b, b.Device)
+		if want := read[b.Codename]; b.Device != want {
+			t.Errorf("%s has ro.product.device %q, want %q", b, b.Device, want)
 		}
 	}
 
-	// The codename is not the property, so it must not match as though it were.
 	for _, name := range Intended() {
 		if b, ok := For(name); ok {
-			t.Errorf("For(%q) matched %s on a codename rather than a ro.product.device", name, b)
+			t.Errorf("For(%q) matched %s, which has no ro.product.device", name, b)
 		}
 	}
 }
 
 func TestFor(t *testing.T) {
-	// biscuit reports biscuit_puffin once it has taken the Fire OS 6 OTA, which is why the lookup is
-	// on ro.product.device rather than the codename.
+	// biscuit reports biscuit_puffin after the Fire OS 6 OTA.
 	if b, ok := For("biscuit_puffin"); !ok || b.Codename != "biscuit" {
 		t.Errorf(`For("biscuit_puffin") = %v, %v; want biscuit`, b, ok)
 	}
 	if b, ok := For("  biscuit_puffin\n"); !ok || b.Codename != "biscuit" {
 		t.Errorf("For did not trim what a device said: %v, %v", b, ok)
 	}
+	// biscuit's recovery reports biscuit.
+	if b, ok := For("biscuit"); !ok || b.Codename != "biscuit" {
+		t.Errorf(`For("biscuit") = %v, %v; want biscuit`, b, ok)
+	}
 	if _, ok := For("sailfish"); ok {
 		t.Error("For matched a device this build has never heard of")
 	}
 }
 
-// A board without hardware to check must claim nothing: no service to take over, no capabilities.
-func TestABoardNobodyHasMetClaimsNothing(t *testing.T) {
+func TestUnsupportedBoardsClaimNothing(t *testing.T) {
 	if Biscuit.ServiceName == "" {
 		t.Error("biscuit names no service for echod to be installed as")
 	}
-	met := map[string]bool{
+	supported := map[string]bool{
 		Biscuit.Device: true, Checkers.Device: true, Cronos.Device: true, Rook.Device: true,
 	}
 
 	for _, b := range All {
-		if met[b.Device] {
+		if supported[b.Device] {
 			continue
 		}
 		if b.Service != "" || b.ServiceName != "" || b.StockLabel != "" {
-			t.Errorf("%s names a service to take over, which nobody has looked at one to find", b)
+			t.Errorf("%s names a service to take over", b)
 		}
 		if b.Caps != 0 {
-			t.Errorf("%s claims capabilities %b that nobody has checked", b, b.Caps)
+			t.Errorf("%s claims capabilities %b", b, b.Caps)
 		}
 	}
 }

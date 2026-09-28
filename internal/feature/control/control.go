@@ -77,9 +77,7 @@ func (c *Control) up() error {
 	}
 	c.listener = l
 
-	// Loudly, because it is a way in. Anything on the device that can open an abstract socket can
-	// drive it, with no pairing and no record of who did.
-	slog.Warn("the control socket is open and unauthenticated", "address", c.addr)
+	slog.Info("the control socket is open to root and adb shell", "address", c.addr)
 
 	go c.accept(l)
 	return nil
@@ -105,6 +103,11 @@ func (c *Control) accept(l net.Listener) {
 		conn, err := l.Accept()
 		if err != nil {
 			return
+		}
+		if uid, ok := caller(conn); !ok {
+			slog.Warn("control socket refused a caller", "uid", uid)
+			conn.Close()
+			continue
 		}
 		go c.serve(conn)
 	}

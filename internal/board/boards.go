@@ -12,7 +12,7 @@ func For(device string) (Board, bool) {
 		return Board{}, false
 	}
 	for _, b := range All {
-		if b.Device == device {
+		if b.Device == device || (b.Device != "" && b.Codename == device) {
 			return b, true
 		}
 	}

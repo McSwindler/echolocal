@@ -93,14 +93,14 @@ func TestLevelerHoldsItsFloorUnderMusic(t *testing.T) {
 		for _, seconds := range []float64{3, 30, 120} {
 			l := newLeveler()
 			talk(l, -65, voice, 30)
-			was := 20 * math.Log10(float64(l.floor) / fullScale)
+			was := 20 * math.Log10(float64(l.floor)/fullScale)
 
 			l.atPlayback(true)
 			for range int(seconds * Rate / FrameSamples) {
 				l.apply(speech(music))
 			}
 
-			if now := 20 * math.Log10(float64(l.floor) / fullScale); now-was > 1 {
+			if now := 20 * math.Log10(float64(l.floor)/fullScale); now-was > 1 {
 				t.Errorf("music %+.0f dBFS for %.0fs: floor %.1f -> %.1f dBFS, a voice at %d is %.1f under it",
 					music, seconds, was, now, voice, now-voice)
 			}

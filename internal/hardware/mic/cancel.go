@@ -41,9 +41,6 @@ const refHold = Rate / 4
 type canceller struct {
 	filter *aec.Canceller
 
-	// mono is reused every frame; copying into it keeps the audio path free of allocation.
-	mono []int16
-
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
 	// it reached during the current run: ERLE is averaged over the last half second, so reading it as
 	// playback ends catches the reference fading out and says the filter did worse than it did.
@@ -102,14 +99,7 @@ func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if erle > c.best.Load() {
 		c.best.Store(erle)
 	}
-
-	// Process reuses its buffer and listeners keep what they are handed, so this is copied out.
-	if cap(c.mono) < len(out) {
-		c.mono = make([]int16, len(out))
-	}
-	c.mono = c.mono[:len(out)]
-	copy(c.mono, out)
-	return c.mono
+	return out
 }
 
 // sounding decodes the loopback and reports whether the device is making a sound, counting the tail
@@ -201,8 +191,16 @@ func (s *Source) SetCancelling(on bool) {
 // reference for from an echo it predicted badly, so it treats the voice as its own error and fits itself
 // to it — at exactly the moment cancelling matters. What it already learned stays correct: the room did
 // not change because somebody spoke.
-func (s *Source) SetAdapting(on bool) {
-	if s.cancel != nil {
-		s.cancel.filter.SetAdapting(on)
-	}
-}
+func (s *Source) SetAdapting(on bool) { s.adapt.Store(on) }
+
+// Freeze holds the canceller still whatever the conversation asks, for measuring it.
+func (s *Source) Freeze(on bool) { s.frozen.Store(on) }
+
+// Adapting reports whether the canceller is learning.
+func (s *Source) Adapting() bool { return s.adapt.Load() && !s.frozen.Load() }
+
+// Frozen reports whether the control socket is holding it still.
+func (s *Source) Frozen() bool { return s.frozen.Load() }
+
+// ResetCancel forgets what the canceller learned, on the next frame.
+func (s *Source) ResetCancel() { s.reset.Store(true) }

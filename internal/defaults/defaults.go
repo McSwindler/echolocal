@@ -59,11 +59,7 @@ var sets = map[string]Set{
 	board.Biscuit.Device: biscuit,
 }
 
-// For is what a board starts from, and biscuit's values for one nobody has measured.
-//
-// Falling back rather than refusing: these are starting points that the first person to change a
-// setting overwrites, and a device that came up with no gain at all would be worse than one that
-// came up with a number borrowed from a Dot.
+// For is what a board starts from, biscuit's where it has no set of its own.
 func For(b board.Board) Set {
 	if s, ok := sets[b.Device]; ok {
 		return s

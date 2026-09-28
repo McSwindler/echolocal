@@ -23,8 +23,6 @@ func TestBiscuitIsWhatItAlwaysWas(t *testing.T) {
 	}
 }
 
-// A board nobody has measured borrows biscuit's numbers rather than coming up with none. Zero gain
-// on an array is a device that cannot hear.
 func TestAnUnmeasuredBoardBorrowsBiscuits(t *testing.T) {
 	if got := For(board.Crown); got != For(board.Biscuit) {
 		t.Errorf("crown starts from %+v, want biscuit's %+v", got, For(board.Biscuit))

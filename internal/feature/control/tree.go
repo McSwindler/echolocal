@@ -2,6 +2,7 @@ package control
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,6 +38,9 @@ func (c *Control) tree() *cobra.Command {
 
 	root.AddCommand(telling()...)
 	root.AddCommand(showing()...)
+	root.AddCommand(hearing()...)
+	root.AddCommand(cancelling()...)
+	root.AddCommand(waiting())
 	return root
 }
 
@@ -69,4 +73,20 @@ func telling() []*cobra.Command {
 	}
 
 	return []*cobra.Command{version, state}
+}
+
+func waiting() *cobra.Command {
+	return &cobra.Command{
+		Use:   "wait <milliseconds>",
+		Short: "Do nothing for a while, between the steps of a sequence",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			ms, err := strconv.Atoi(args[0])
+			if err != nil || ms < 0 || ms > 60_000 {
+				return fmt.Errorf("%q is not a number of milliseconds up to a minute", args[0])
+			}
+			time.Sleep(time.Duration(ms) * time.Millisecond)
+			return nil
+		},
+	}
 }

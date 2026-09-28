@@ -3,9 +3,6 @@
 // It is host-only on purpose. Boot image hashes, partition offsets and the bytes that make an adbd
 // give up root have no business in the binary that runs on the device, and echod is the one thing
 // here that has to stay small.
-//
-// A board echoctl has a name for but no profile is refused differently from a device nobody has
-// heard of.
 package profile
 
 import (
@@ -80,8 +77,7 @@ func (p Profile) SDKRefusal() string {
 func For(device string) (Profile, error) {
 	b, known := board.For(device)
 	if !known {
-		return Profile{}, fmt.Errorf("profile: this device calls itself %q, which is not one this build installs to. Boards meant to be supported but never met: %s — none has had its ro.product.device recorded, and %q is what one of those entries needs if this is one of them",
-			device, strings.Join(board.Intended(), ", "), device)
+		return Profile{}, fmt.Errorf("profile: %q is not a device this build installs to", device)
 	}
 
 	p, ok := profiles[b.Device]

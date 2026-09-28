@@ -105,12 +105,22 @@ func list(states ...string) ([]Info, error) {
 
 	out := make([]Info, 0, len(serials))
 	for _, serial := range serials {
-		d := &Device{serial: serial}
-		model, _ := d.Getprop("ro.product.model")
-		product, _ := d.Getprop("ro.product.device")
-		out = append(out, Info{Serial: serial, Model: model, Product: product})
+		out = append(out, probe(serial))
 	}
 	return out, nil
+}
+
+// probeTimeout is how long a listing waits on one device. An adb shell into some boards never returns.
+const probeTimeout = 3 * time.Second
+
+func probe(serial string) Info {
+	d := &Device{serial: serial}
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+
+	model, _ := d.run(ctx, "shell", "getprop ro.product.model")
+	product, _ := d.run(ctx, "shell", "getprop ro.product.device")
+	return Info{Serial: serial, Model: strings.TrimSpace(model), Product: strings.TrimSpace(product)}
 }
 
 // InRecovery reports whether adb lists this device in recovery right now, which decides whether an

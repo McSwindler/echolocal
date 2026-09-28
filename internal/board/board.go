@@ -14,9 +14,6 @@ import "strings"
 
 // Cap is hardware a board either has or does not, where the difference decides whether a component
 // exists at all rather than how one behaves.
-//
-// Only what something gates today is defined. A capability with no consumer is a guess about
-// hardware nobody has yet, and it would be a guess made without the device in hand.
 type Cap uint32
 
 const (
@@ -75,7 +72,7 @@ type Board struct {
 	// DefaultName is the fallback display name for a device that has none recorded.
 	DefaultName string
 
-	// Caps is what this board has. Zero where nobody has checked, which is not the same as none.
+	// Caps is what this board has.
 	Caps Cap
 
 	// Keys is what this board's buttons report, where they are not the usual codes.
@@ -96,8 +93,7 @@ type Board struct {
 	ServiceName string
 	StockLabel  string
 
-	// color decodes the shell colour from this board's idme fields. Nil where nobody has worked out
-	// the encoding, which is every board but biscuit.
+	// color decodes the shell colour from this board's idme fields.
 	color func(idme func(string) string) string
 }
 
