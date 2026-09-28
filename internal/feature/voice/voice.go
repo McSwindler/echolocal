@@ -142,6 +142,10 @@ func (v *Voice) Action() {
 // would be worse than not listening for it at all. Nothing is playing then, so there is nothing the word
 // could sensibly mean.
 func (v *Voice) Interrupt() {
+	if v.turn.Phase() == phaseListening {
+		slog.Debug("stop word ignored, the turn is listening")
+		return
+	}
 	if !speaker.Sound().Busy() && !timer.Get().Ringing() {
 		if playing, _ := media.Get().Playing(); !playing {
 			slog.Debug("stop word ignored, nothing to stop")
