@@ -80,6 +80,28 @@ func TestCancelledFramesAreNotOneBuffer(t *testing.T) {
 	}
 }
 
+func TestEngineSwapsOnTheNextFrame(t *testing.T) {
+	s := quietSource()
+	s.cancelling = true
+	if s.Engine() != EngineSpeex {
+		t.Fatalf("starts on %q, want %q", s.Engine(), EngineSpeex)
+	}
+	if err := s.SetEngine("nonsense"); err == nil {
+		t.Error("accepted an engine that does not exist")
+	}
+
+	if err := s.SetEngine(EngineNLMS); err != nil {
+		t.Fatal(err)
+	}
+	if s.Engine() != EngineSpeex {
+		t.Error("swapped before the reader got to it")
+	}
+	s.broadcast(captured(0, true))
+	if s.Engine() != EngineNLMS {
+		t.Errorf("after a frame the engine is %q, want %q", s.Engine(), EngineNLMS)
+	}
+}
+
 func captured(nth int, playing bool) []byte {
 	const frameBytes = Channels * Bits / 8
 

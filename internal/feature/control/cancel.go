@@ -15,8 +15,8 @@ func cancelling() []*cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			s := mic.Get()
-			fmt.Fprintf(cmd.OutOrStdout(), "running  %t\nlearning %t\nfrozen   %t\nerle_db  %.1f\n",
-				s.Cancelling(), s.Adapting(), s.Frozen(), s.ERLE())
+			fmt.Fprintf(cmd.OutOrStdout(), "engine   %s\nrunning  %t\nlearning %t\nfrozen   %t\nerle_db  %.1f\n",
+				s.Engine(), s.Cancelling(), s.Adapting(), s.Frozen(), s.ERLE())
 			return nil
 		},
 	}
@@ -48,6 +48,15 @@ func cancelling() []*cobra.Command {
 		},
 	}
 
-	cancel.AddCommand(adapt, reset)
+	engine := &cobra.Command{
+		Use:   "engine " + mic.EngineSpeex + "|" + mic.EngineNLMS,
+		Short: "Swap the echo canceller, starting it from nothing, until echod restarts",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			return mic.Get().SetEngine(args[0])
+		},
+	}
+
+	cancel.AddCommand(adapt, reset, engine)
 	return []*cobra.Command{cancel}
 }

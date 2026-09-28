@@ -1,6 +1,7 @@
 package mic
 
 import (
+	"fmt"
 	"log/slog"
 	"math"
 	"sync/atomic"
@@ -9,15 +10,35 @@ import (
 	"github.com/ygelfand/echolocal/internal/lib/audio"
 )
 
-// cancelTaps is how far the filter reaches, in samples, so 64 ms of tail. Not a setting: measured on
-// this enclosure, cancellation rises with every tap available — 16.5 dB at 256, 18.6 at 512, 23.0 at
-// 1024, 27.2 at 2048 — so there is no room-dependent best value to look for, only what the device can
-// afford. This costs 6.4% of a core, and only while something is playing.
+// cancelTaps is the echo tail either filter reaches, 64 ms. Measured on a Dot: 12.2% of a core with
+// nlms, 13.7% with speex.
 const cancelTaps = 1024
 
-// cancelMu is how fast the filter adapts. Fast enough to converge inside the first second of a reply,
-// which matters because a reply is all the time there is.
+// cancelMu is the nlms step size.
 const cancelMu = 0.5
+
+// The echo cancellers.
+const (
+	EngineSpeex = "speex"
+	EngineNLMS  = "nlms"
+)
+
+// speexFrame is the speex block, which divides FrameSamples.
+const speexFrame = 64
+
+func newFilter(engine string) (echoFilter, error) {
+	switch engine {
+	case EngineSpeex:
+		return aec.NewMDF(speexFrame, cancelTaps, Rate)
+	case EngineNLMS:
+		f, err := aec.New(aec.Config{Taps: cancelTaps, Mu: cancelMu})
+		if err != nil {
+			return nil, err
+		}
+		return f, nil
+	}
+	return nil, fmt.Errorf("mic: no echo canceller called %q", engine)
+}
 
 // refQuiet is the mean square per sample, at int16 scale, below which the loopback counts as silence.
 // About -60 dBFS. Below it there is no echo to remove, so the filter is skipped entirely and the frame
@@ -39,7 +60,8 @@ const refHold = Rate / 4
 // reads cannot move — and the beamformer steers at the loudest sound, which during playback is our own
 // speaker. Steering into the echo is the opposite of useful when the echo is what is being removed.
 type canceller struct {
-	filter *aec.Canceller
+	filter echoFilter
+	engine string
 
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
 	// it reached during the current run: ERLE is averaged over the last half second, so reading it as
@@ -54,14 +76,21 @@ type canceller struct {
 	blocks     int
 }
 
+// echoFilter is what removes the echo: aec.Canceller or aec.MDF.
+type echoFilter interface {
+	Process(mic, ref []int16) ([]int16, error)
+	ERLE() float64
+	SetAdapting(on bool)
+	Reset()
+}
+
 func newCanceller() *canceller {
-	f, err := aec.New(aec.Config{Taps: cancelTaps, Mu: cancelMu})
+	f, err := newFilter(EngineSpeex)
 	if err != nil {
-		// Only a bad Taps or Mu reaches this, and both are constants above.
 		slog.Error("echo cancellation unavailable", "err", err)
 		return nil
 	}
-	return &canceller{filter: f}
+	return &canceller{filter: f, engine: EngineSpeex}
 }
 
 // idle is the frame having no playback in it. The filter keeps what it learned: the room has not
@@ -83,7 +112,7 @@ func (c *canceller) idle() {
 // playback in.
 func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if !c.active.Swap(true) {
-		slog.Info("echo cancellation running", "taps", cancelTaps)
+		slog.Info("echo cancellation running", "engine", c.engine, "taps", cancelTaps)
 	}
 	c.refE += power(ref)
 	c.micE += power(mics[CenterMic])
@@ -204,3 +233,37 @@ func (s *Source) Frozen() bool { return s.frozen.Load() }
 
 // ResetCancel forgets what the canceller learned, on the next frame.
 func (s *Source) ResetCancel() { s.reset.Store(true) }
+
+// SetEngine swaps the echo canceller, on the next frame, starting it from nothing.
+func (s *Source) SetEngine(engine string) error {
+	if _, err := newFilter(engine); err != nil {
+		return err
+	}
+	s.wantEngine.Store(&engine)
+	return nil
+}
+
+// Engine is the echo canceller running.
+func (s *Source) Engine() string {
+	if e := s.engineNow.Load(); e != nil {
+		return *e
+	}
+	return ""
+}
+
+// swapEngine is the reader's half of SetEngine.
+func (s *Source) swapEngine() {
+	want := s.wantEngine.Swap(nil)
+	if want == nil || *want == s.cancel.engine {
+		return
+	}
+	f, err := newFilter(*want)
+	if err != nil {
+		slog.Error("echo cancellation engine", "err", err)
+		return
+	}
+	s.cancel.idle()
+	s.cancel.filter, s.cancel.engine = f, *want
+	s.engineNow.Store(want)
+	slog.Info("echo cancellation engine", "engine", *want)
+}

@@ -86,6 +86,8 @@ type Source struct {
 	// to forget the room. Anything may set them; only the reader hands them to the filter.
 	adapt, frozen, reset atomic.Bool
 
+	wantEngine, engineNow atomic.Pointer[string]
+
 	echoes map[int]chan Echo
 
 	// ref is the decoded loopback and hold the samples still counted as sounding after it goes quiet.
@@ -148,6 +150,9 @@ func New() *Source {
 	s.finder.hold = 1
 	s.facing.Store(-1)
 	s.adapt.Store(true)
+	if s.cancel != nil {
+		s.engineNow.Store(&s.cancel.engine)
+	}
 	s.leveling.Store(config.Get().Microphone.Leveling)
 	s.denoising.Store(config.Get().Microphone.Denoise)
 	return s
@@ -400,6 +405,7 @@ func (s *Source) broadcast(raw []byte) {
 	s.leveler.atPlayback(sounding)
 
 	if s.cancelling && s.cancel != nil {
+		s.swapEngine()
 		if s.reset.Swap(false) {
 			s.cancel.filter.Reset()
 		}
