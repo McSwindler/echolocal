@@ -402,6 +402,9 @@ func (s *Source) broadcast(raw []byte) {
 		}
 	}
 
+	// The canceller and the mixers hand back a buffer they overwrite next frame.
+	frame = append([]int16(nil), frame...)
+
 	s.findFacing(mics)
 
 	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the

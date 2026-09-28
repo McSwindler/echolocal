@@ -41,9 +41,6 @@ const refHold = Rate / 4
 type canceller struct {
 	filter *aec.Canceller
 
-	// mono is reused every frame; copying into it keeps the audio path free of allocation.
-	mono []int16
-
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
 	// it reached during the current run: ERLE is averaged over the last half second, so reading it as
 	// playback ends catches the reference fading out and says the filter did worse than it did.
@@ -102,14 +99,7 @@ func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if erle > c.best.Load() {
 		c.best.Store(erle)
 	}
-
-	// Process reuses its buffer and listeners keep what they are handed, so this is copied out.
-	if cap(c.mono) < len(out) {
-		c.mono = make([]int16, len(out))
-	}
-	c.mono = c.mono[:len(out)]
-	copy(c.mono, out)
-	return c.mono
+	return out
 }
 
 // sounding decodes the loopback and reports whether the device is making a sound, counting the tail
