@@ -9,15 +9,11 @@ import (
 	"github.com/ygelfand/echolocal/internal/lib/audio"
 )
 
-// cancelTaps is how far the filter reaches, in samples, so 64 ms of tail. Not a setting: measured on
-// this enclosure, cancellation rises with every tap available — 16.5 dB at 256, 18.6 at 512, 23.0 at
-// 1024, 27.2 at 2048 — so there is no room-dependent best value to look for, only what the device can
-// afford. This costs 6.4% of a core, and only while something is playing.
+// cancelTaps is the echo tail the filter reaches, 64 ms. Measured on a Dot: 13.7% of a core.
 const cancelTaps = 1024
 
-// cancelMu is how fast the filter adapts. Fast enough to converge inside the first second of a reply,
-// which matters because a reply is all the time there is.
-const cancelMu = 0.5
+// speexFrame is the speex block, which divides FrameSamples.
+const speexFrame = 64
 
 // refQuiet is the mean square per sample, at int16 scale, below which the loopback counts as silence.
 // About -60 dBFS. Below it there is no echo to remove, so the filter is skipped entirely and the frame
@@ -39,7 +35,7 @@ const refHold = Rate / 4
 // reads cannot move — and the beamformer steers at the loudest sound, which during playback is our own
 // speaker. Steering into the echo is the opposite of useful when the echo is what is being removed.
 type canceller struct {
-	filter *aec.Canceller
+	filter *aec.MDF
 
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
 	// it reached during the current run: ERLE is averaged over the last half second, so reading it as
@@ -55,9 +51,8 @@ type canceller struct {
 }
 
 func newCanceller() *canceller {
-	f, err := aec.New(aec.Config{Taps: cancelTaps, Mu: cancelMu})
+	f, err := aec.NewMDF(speexFrame, cancelTaps, Rate)
 	if err != nil {
-		// Only a bad Taps or Mu reaches this, and both are constants above.
 		slog.Error("echo cancellation unavailable", "err", err)
 		return nil
 	}
@@ -83,7 +78,7 @@ func (c *canceller) idle() {
 // playback in.
 func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if !c.active.Swap(true) {
-		slog.Info("echo cancellation running", "taps", cancelTaps)
+		slog.Info("echo cancellation running", "engine", "speex", "taps", cancelTaps)
 	}
 	c.refE += power(ref)
 	c.micE += power(mics[CenterMic])
