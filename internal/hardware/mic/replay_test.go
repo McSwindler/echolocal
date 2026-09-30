@@ -34,9 +34,9 @@ func TestReplayPipeline(t *testing.T) {
 		ref[i] = int16(binary.LittleEndian.Uint16(pcm[6*i+2:]))
 	}
 
-	speex := func(taps int) func() echoFilter {
-		return func() echoFilter {
-			f, err := aec.NewMDF(64, taps, Rate)
+	taps := func(n int) func() *aec.MDF {
+		return func() *aec.MDF {
+			f, err := aec.NewMDF(speexFrame, n, Rate)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -47,7 +47,7 @@ func TestReplayPipeline(t *testing.T) {
 	variants := []struct {
 		name                          string
 		cancel, denoise, frozen, cold bool
-		filter                        func() echoFilter
+		filter                        func() *aec.MDF
 		raw                           bool
 	}{
 		{"device", true, true, false, false, nil, false},
@@ -55,14 +55,12 @@ func TestReplayPipeline(t *testing.T) {
 		{"frozen", true, true, true, false, nil, false},
 		{"frozen-no-denoise", true, false, true, false, nil, false},
 		{"no-cancel", false, true, false, false, nil, false},
-		{"nlms-cold", true, true, false, true, nil, false},
-		{"speex-cold", true, true, false, true, speex(1024), false},
-		{"speex-cold-no-denoise", true, false, false, true, speex(1024), false},
-		{"speex", true, true, false, false, speex(1024), false},
-		{"speex-4096-cold", true, true, false, true, speex(4096), false},
-		{"speex-4096", true, true, false, false, speex(4096), false},
-		{"speex-raw-cold", true, false, false, true, speex(1024), true},
-		{"speex-4096-raw-cold", true, false, false, true, speex(4096), true},
+		{"cold", true, true, false, true, nil, false},
+		{"cold-no-denoise", true, false, false, true, nil, false},
+		{"raw-cold", true, false, false, true, nil, true},
+		{"4096", true, true, false, false, taps(4096), false},
+		{"4096-cold", true, true, false, true, taps(4096), false},
+		{"4096-raw-cold", true, false, false, true, taps(4096), true},
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {

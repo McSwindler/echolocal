@@ -1,7 +1,6 @@
 package mic
 
 import (
-	"fmt"
 	"log/slog"
 	"math"
 	"sync/atomic"
@@ -10,35 +9,11 @@ import (
 	"github.com/ygelfand/echolocal/internal/lib/audio"
 )
 
-// cancelTaps is the echo tail either filter reaches, 64 ms. Measured on a Dot: 12.2% of a core with
-// nlms, 13.7% with speex.
+// cancelTaps is the echo tail the filter reaches, 64 ms. Measured on a Dot: 13.7% of a core.
 const cancelTaps = 1024
-
-// cancelMu is the nlms step size.
-const cancelMu = 0.5
-
-// The echo cancellers.
-const (
-	EngineSpeex = "speex"
-	EngineNLMS  = "nlms"
-)
 
 // speexFrame is the speex block, which divides FrameSamples.
 const speexFrame = 64
-
-func newFilter(engine string) (echoFilter, error) {
-	switch engine {
-	case EngineSpeex:
-		return aec.NewMDF(speexFrame, cancelTaps, Rate)
-	case EngineNLMS:
-		f, err := aec.New(aec.Config{Taps: cancelTaps, Mu: cancelMu})
-		if err != nil {
-			return nil, err
-		}
-		return f, nil
-	}
-	return nil, fmt.Errorf("mic: no echo canceller called %q", engine)
-}
 
 // refQuiet is the mean square per sample, at int16 scale, below which the loopback counts as silence.
 // About -60 dBFS. Below it there is no echo to remove, so the filter is skipped entirely and the frame
@@ -60,8 +35,7 @@ const refHold = Rate / 4
 // reads cannot move — and the beamformer steers at the loudest sound, which during playback is our own
 // speaker. Steering into the echo is the opposite of useful when the echo is what is being removed.
 type canceller struct {
-	filter echoFilter
-	engine string
+	filter *aec.MDF
 
 	// erle is published for diagnostics, as thousandths of a dB so it fits an integer. best is the most
 	// it reached during the current run: ERLE is averaged over the last half second, so reading it as
@@ -76,21 +50,13 @@ type canceller struct {
 	blocks     int
 }
 
-// echoFilter is what removes the echo: aec.Canceller or aec.MDF.
-type echoFilter interface {
-	Process(mic, ref []int16) ([]int16, error)
-	ERLE() float64
-	SetAdapting(on bool)
-	Reset()
-}
-
 func newCanceller() *canceller {
-	f, err := newFilter(EngineSpeex)
+	f, err := aec.NewMDF(speexFrame, cancelTaps, Rate)
 	if err != nil {
 		slog.Error("echo cancellation unavailable", "err", err)
 		return nil
 	}
-	return &canceller{filter: f, engine: EngineSpeex}
+	return &canceller{filter: f}
 }
 
 // idle is the frame having no playback in it. The filter keeps what it learned: the room has not
@@ -112,7 +78,7 @@ func (c *canceller) idle() {
 // playback in.
 func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
 	if !c.active.Swap(true) {
-		slog.Info("echo cancellation running", "engine", c.engine, "taps", cancelTaps)
+		slog.Info("echo cancellation running", "engine", "speex", "taps", cancelTaps)
 	}
 	c.refE += power(ref)
 	c.micE += power(mics[CenterMic])
@@ -233,37 +199,3 @@ func (s *Source) Frozen() bool { return s.frozen.Load() }
 
 // ResetCancel forgets what the canceller learned, on the next frame.
 func (s *Source) ResetCancel() { s.reset.Store(true) }
-
-// SetEngine swaps the echo canceller, on the next frame, starting it from nothing.
-func (s *Source) SetEngine(engine string) error {
-	if _, err := newFilter(engine); err != nil {
-		return err
-	}
-	s.wantEngine.Store(&engine)
-	return nil
-}
-
-// Engine is the echo canceller running.
-func (s *Source) Engine() string {
-	if e := s.engineNow.Load(); e != nil {
-		return *e
-	}
-	return ""
-}
-
-// swapEngine is the reader's half of SetEngine.
-func (s *Source) swapEngine() {
-	want := s.wantEngine.Swap(nil)
-	if want == nil || *want == s.cancel.engine {
-		return
-	}
-	f, err := newFilter(*want)
-	if err != nil {
-		slog.Error("echo cancellation engine", "err", err)
-		return
-	}
-	s.cancel.idle()
-	s.cancel.filter, s.cancel.engine = f, *want
-	s.engineNow.Store(want)
-	slog.Info("echo cancellation engine", "engine", *want)
-}
