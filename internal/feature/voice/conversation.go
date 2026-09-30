@@ -86,6 +86,7 @@ const (
 	evPlaying                      // the reply has audio, so the pipeline owes nothing more
 	evContinue                     // Home Assistant wants the answer to a question it just asked
 	evSpeaking                     // VAD detected speech has started
+	evAccepted                     // Home Assistant kept this turn and is transcribing it
 )
 
 type event struct {
@@ -122,6 +123,10 @@ type conversation struct {
 
 	// out is everything bound for Home Assistant, so nothing local waits on the socket.
 	out chan func() error
+
+	// quietUntil is when the chime stops sounding, in unix nanoseconds, for the streamer to hold the
+	// microphone back until.
+	quietUntil atomic.Int64
 
 	// visible is the phase, published for anything outside the loop that needs to ask. Only the loop
 	// writes it, and a reader tolerates being a moment out of date: the button uses it to choose
@@ -306,6 +311,15 @@ func (c *conversation) handle(e event) {
 	case evSpeaking:
 		if c.followUp && c.phase == phaseListening {
 			c.arm(wakeword.MaxListen(c.slot))
+		}
+
+	case evAccepted:
+		// A follow-up chimes like any other turn: the microphone is open with nothing said to say so.
+		if c.phase == phaseListening {
+			wakeword.Chime(c.slot)
+			if wakeword.Tones(c.slot) {
+				c.quietUntil.Store(time.Now().Add(wakeword.ChimeLength(c.slot) + speaker.HardwareTail).UnixNano())
+			}
 		}
 
 	case evContinue:
@@ -533,9 +547,7 @@ func (c *conversation) start(n nextTurn) {
 	// sounds at its own level rather than being faded along with the track underneath it.
 	c.hold(true)
 
-	// A follow-up chimes like any other turn: the microphone is open with nothing said to say so.
-	// It is not a wake, though, so it does not report a phrase nobody spoke.
-	wakeword.Chime(slot)
+	c.quietUntil.Store(0)
 	if !n.followUp {
 		c.log.Woke(phrase)
 	}
@@ -748,6 +760,8 @@ func (c *conversation) phraseFor(slot int) (string, bool) {
 // it does nothing but translate.
 func (c *conversation) pipeline(e esphome.PipelineEvent) {
 	switch e.Type {
+	case api.VoiceAssistantEvent_VOICE_ASSISTANT_STT_START:
+		c.post(event{kind: evAccepted})
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_STT_END:
 		c.post(event{kind: evHeard, text: e.Data["text"]})
 	case api.VoiceAssistantEvent_VOICE_ASSISTANT_STT_VAD_START:
@@ -866,13 +880,7 @@ func (c *conversation) stream(ctx context.Context, slot int) {
 
 	// What the microphone actually sends is the input to speech recognition, and a quiet or clipped
 	// stream explains a bad transcript better than anything downstream does.
-	// The tone plays as the turn opens and is louder at the array than a talker across the room, so
-	// nothing is sent while it is sounding. What the speaker still has queued says when that is, and
-	// hardwareTail is what the driver holds after the queue runs out.
-	var sounding time.Time
-	if wakeword.Tones(slot) {
-		sounding = time.Now().Add(wakeword.ChimeLength(slot) + speaker.HardwareTail)
-	}
+	// The tone is louder at the array than a talker across the room, so nothing is sent while it sounds.
 	var held int
 
 	var peak, samples int
@@ -902,13 +910,15 @@ func (c *conversation) stream(ctx context.Context, slot int) {
 				return
 			}
 
-			if !sounding.IsZero() {
-				if time.Now().Before(sounding) {
+			if until := c.quietUntil.Load(); until != 0 {
+				if time.Now().UnixNano() < until {
 					held += len(frame)
 					continue
 				}
-				sounding = time.Time{}
-				slog.Debug("held the tone back", "ms", held*1000/mic.Rate)
+				if held > 0 {
+					slog.Debug("held the tone back", "ms", held*1000/mic.Rate)
+					held = 0
+				}
 			}
 
 			buf = buf[:0]
