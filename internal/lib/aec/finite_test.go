@@ -14,7 +14,6 @@ import (
 // audio, which is a second of CPU here.
 func TestStateStaysFiniteUnderAdversarialInput(t *testing.T) {
 	const (
-		taps   = 256
 		frames = 2000
 		hop    = 320
 	)
@@ -35,7 +34,7 @@ func TestStateStaysFiniteUnderAdversarialInput(t *testing.T) {
 	}
 
 	for _, p := range patterns {
-		c, err := New(Config{Taps: taps, Mu: 0.3})
+		c, err := NewMDF(64, 1024, 16000)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,19 +52,31 @@ func TestStateStaysFiniteUnderAdversarialInput(t *testing.T) {
 			}
 		}
 
-		bad := 0
-		for _, v := range c.w {
-			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-				bad++
+		bad, taps := 0, 0
+		for _, block := range append(c.w, c.fg...) {
+			for _, v := range block {
+				taps++
+				if !finite(real(v)) || !finite(imag(v)) {
+					bad++
+				}
 			}
 		}
-		for what, v := range map[string]float64{"pow": float64(c.pow), "sumD": c.sumD, "sumE": c.sumE} {
+		if bad > 0 {
+			t.Errorf("%s: %d of %d filter weights are non-finite", p.name, bad, taps)
+		}
+		for what, v := range map[string]float64{
+			"pey": float64(c.pey), "pyy": float64(c.pyy), "leak": float64(c.leak),
+			"sumD": c.sumD, "sumE": c.sumE,
+		} {
 			if math.IsNaN(v) || math.IsInf(v, 0) {
 				t.Errorf("%s: %s is %v", p.name, what, v)
 			}
 		}
-		if bad > 0 {
-			t.Errorf("%s: %d of %d filter taps are non-finite", p.name, bad, len(c.w))
+		for i := range c.power {
+			if !finite(c.power[i]) || !finite(c.power1[i]) {
+				t.Errorf("%s: bin %d power %v, inverse %v", p.name, i, c.power[i], c.power1[i])
+				break
+			}
 		}
 
 		// Whatever it learned, speech afterwards has to survive it. This is the check that would have
@@ -92,6 +103,11 @@ func TestStateStaysFiniteUnderAdversarialInput(t *testing.T) {
 		}
 		t.Logf("%-34s erle=%6.2f dB  tone after=%5d", p.name, c.ERLE(), loudest)
 	}
+}
+
+func finite(v float32) bool {
+	f := float64(v)
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 func sq(i int) int16 {
