@@ -484,10 +484,13 @@ func (d *Diag) hardware() {
 	}
 
 	d.luxPath = metrics.Reader{}.LuxPath()
-	if d.luxPath == "" {
-		slog.Warn("no light sensor found")
-	} else {
+	switch {
+	case d.luxPath != "":
 		slog.Info("light sensor", "at", d.luxPath)
+	case metrics.Ambient != nil:
+		slog.Info("light sensor", "at", "alsps")
+	default:
+		slog.Warn("no light sensor found")
 	}
 	d.lux = &esphome.Sensor{
 		Base: esphome.Base{

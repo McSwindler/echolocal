@@ -322,9 +322,11 @@ func (r *Receiver) booted(p component.Progress) { r.boot.Store(&p) }
 
 func (r *Receiver) Startup() component.Progress {
 	if p := r.boot.Load(); p != nil {
-		return *p
+		q := *p
+		q.Background = true
+		return q
 	}
-	return component.Progress{Doing: "waiting for the network"}
+	return component.Progress{Doing: "waiting for the network", Background: true}
 }
 
 // Close takes it down, so a restart does not leave a socket held or a service advertised.

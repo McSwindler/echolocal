@@ -63,6 +63,9 @@ type Config struct {
 	// written without it: the caller asks, because by the time a stage runs the terminal belongs to
 	// the progress display.
 	Approved bool
+
+	// Reflash writes the boot image to a device that already has root.
+	Reflash bool
 }
 
 type step struct {

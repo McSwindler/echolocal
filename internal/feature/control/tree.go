@@ -40,9 +40,14 @@ func (c *Control) tree() *cobra.Command {
 	root.AddCommand(showing()...)
 	root.AddCommand(hearing()...)
 	root.AddCommand(cancelling()...)
-	root.AddCommand(waiting())
+	root.AddCommand(waiting(), pressing())
+	for _, more := range boardCommands {
+		root.AddCommand(more())
+	}
 	return root
 }
+
+var boardCommands []func() *cobra.Command
 
 // telling is what the device will say about itself.
 func telling() []*cobra.Command {

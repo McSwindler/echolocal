@@ -14,6 +14,8 @@ const (
 	Dir      = "/system/app/echod"
 	Binary   = Dir + "/echod"
 	Surface  = Dir + "/echolocal-surface"
+	Camera   = Dir + "/echolocal-camera"
+	CamShim  = Dir + "/libecholocal-camshim.so"
 	StateDir = "/data/misc/echolocal"
 	KeyPath  = StateDir + "/psk"
 	NamePath = StateDir + "/name"
@@ -27,6 +29,10 @@ const (
 	Service        = "echod"
 	SurfaceService = "echolocal_sf"
 	InitRC         = "/system/etc/init/echolocal.rc"
+
+	CameraService       = "echolocal_cam"
+	CameraServerService = "cameraserver"
+	CameraSocket        = "/dev/socket/echolocal-camera"
 
 	// PrevBinary is the binary an update replaced, kept until the new one has proved itself. Its
 	// presence at boot is what says a trial never finished, so nothing may leave one lying around.

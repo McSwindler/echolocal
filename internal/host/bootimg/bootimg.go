@@ -93,7 +93,7 @@ var Biscuit = Image{
 
 // Checkers is the boot image for a 1st-generation Echo Show 5.
 var Checkers = Image{
-	SHA256:  "00afadfcaea1eb2ccfded4481a8d1c619e0f0dfac0edfdf0907a76814de893cd",
+	SHA256:  "634e567500b1ec9712fc66fb1ca07dac0b36f352a7164fede32da739d1409d42",
 	Size:    8210432,
 	Cmdline: "androidboot.selinux=permissive",
 	Build:   13222531716,
@@ -105,7 +105,7 @@ var Checkers = Image{
 
 // Cronos is the boot image for a 2nd-generation Echo Show 5.
 var Cronos = Image{
-	SHA256:  "f203d81891a00491ee6473b09a029bd18a21c22e6e6f4abce22da82db60cf08e",
+	SHA256:  "7de1246bf8501087fbd134257c6d24390bc6a2cb3b9e013fafebdfdc1540105d",
 	Size:    8691712,
 	Cmdline: "androidboot.selinux=permissive",
 	Build:   13222531716,

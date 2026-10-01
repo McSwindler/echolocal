@@ -6,6 +6,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/ui"
+	"github.com/ygelfand/echolocal/internal/ui/reveal"
 	uitheme "github.com/ygelfand/echolocal/internal/ui/theme"
 )
 
@@ -18,18 +19,20 @@ const (
 	dotShare   = 0.22
 )
 
-// drawBoot paints the mark beside what the device is still waiting for.
+// drawBoot leaves the mark's half clear for the reveal under it, and lists what the device is still
+// waiting for beside it.
 func drawBoot(p *display.Panel, t uitheme.Theme, progress []component.Progress) {
 	s := ui.Of(p)
-	ui.Fill(s, t.Background)
+	w, h := s.Size()
 
-	logo, list := split(bounds(p))
-	ui.DrawLogo(s, box(inset(logo, min(logo.Dx(), logo.Dy())/8)), t.Background)
+	logo, list := reveal.Split(w, h)
+	ui.Clear(s, logo)
+	ui.FillRect(s, list, t.Background)
 
 	if len(progress) == 0 {
 		return
 	}
-	rows(s, box(list), t, progress)
+	rows(s, list, t, progress)
 }
 
 func bounds(p *display.Panel) image.Rectangle { return image.Rect(0, 0, p.Width, p.Height) }

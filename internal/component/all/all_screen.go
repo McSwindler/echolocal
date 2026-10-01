@@ -5,6 +5,7 @@ package all
 // The screen, its palette and the artwork it shows. Most of a megabyte of that is the artwork,
 // which has no business in a build for a board with no panel.
 import (
+	_ "github.com/ygelfand/echolocal/internal/feature/brightness"
 	_ "github.com/ygelfand/echolocal/internal/feature/clock"
 	_ "github.com/ygelfand/echolocal/internal/feature/drawer"
 	_ "github.com/ygelfand/echolocal/internal/feature/idle"

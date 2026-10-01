@@ -178,7 +178,7 @@ func checkApproval(r *run) (string, bool, error) {
 // done reports whether the writing steps have anything to do. What is tested is root, not which image
 // is installed: a device that has it needs nothing from us whatever it is running.
 func (r *run) done() (string, bool) {
-	if r.state.ready() {
+	if r.state.ready() && !r.cfg.Reflash {
 		return "already root and permissive", true
 	}
 	return "", false

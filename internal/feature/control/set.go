@@ -26,7 +26,17 @@ type setting struct {
 	use  func(string) error
 }
 
+var boardSettings []func() []setting
+
 func settings() []setting {
+	out := screenSettings()
+	for _, more := range boardSettings {
+		out = append(out, more()...)
+	}
+	return out
+}
+
+func screenSettings() []setting {
 	c, i, v := clock.Get(), idle.Get(), visuals.Get()
 
 	return []setting{

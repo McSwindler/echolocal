@@ -59,7 +59,7 @@ func (c *Client) Startup() component.Progress {
 	if component.Board().Has(board.Wifi) && !wifi.Get().Configured() {
 		return component.Progress{Failed: true, Doing: "no network"}
 	}
-	return component.Progress{Doing: "asking for an address"}
+	return component.Progress{Doing: "asking for an address", Background: true}
 }
 
 // Lease is the address currently held, or nil when there is none.

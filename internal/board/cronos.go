@@ -8,10 +8,12 @@ var Cronos = Board{
 	Codename:      "cronos",
 	Model:         "Echo Show 5 2nd gen (cronos)",
 	DefaultName:   "Echo Show 5",
-	Caps:          Panel | Wifi | Shutter,
+	Caps:          Panel | Wifi | Shutter | Camera,
 	PanelRotation: 270,
 	Keys:          map[uint16]Key{116: Mute},
 	MuteDir:       "/sys/devices/platform/gpio-privacy",
+
+	CameraWidth: 1280, CameraHeight: 720,
 
 	Service:     layout.Binary,
 	ServiceName: layout.Service,

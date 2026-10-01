@@ -43,6 +43,7 @@ func newInstallCmd() *cobra.Command {
 		wps       bool
 		genKey    bool
 		flashOnly bool
+		reflash   bool
 		assumeYes bool
 		doReboot  bool
 		noReboot  bool
@@ -76,7 +77,7 @@ func newInstallCmd() *cobra.Command {
 				return err
 			}
 
-			cfg := installer.Config{ZeroPSK: !genKey, Profile: p}
+			cfg := installer.Config{ZeroPSK: !genKey, Profile: p, Reflash: reflash}
 
 			// The image is only resolved when it is going to be written. A device that already has root
 			// needs none, so an install onto one never touches the network.
@@ -84,7 +85,7 @@ func newInstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !state.Ready && p.Boot.SHA256 != "" {
+			if (!state.Ready || reflash) && p.Boot.SHA256 != "" {
 				if cfg.BootImage, cfg.BootImageFrom, err = resolveBootImage(cmd.Context(), out, p, bootImage); err != nil {
 					return err
 				}
@@ -161,6 +162,7 @@ func newInstallCmd() *cobra.Command {
 	c.Flags().BoolVar(&wps, "wps", false, "join by pressing the router's WPS button instead")
 	c.Flags().BoolVar(&flashOnly, "flash-only", false,
 		"write the boot image and stop, without installing echod")
+	c.Flags().BoolVar(&reflash, "reflash", false, "write the boot image even when the device already has root")
 	c.Flags().BoolVarP(&assumeYes, "yes", "y", false,
 		"do not ask before overwriting the boot partition")
 	c.Flags().BoolVar(&genKey, "generate-key", false,

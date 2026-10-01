@@ -24,6 +24,9 @@ settings.title: Settings
 settings.display: Display
 settings.volume: Volume
 settings.features: Features
+settings.camera: Camera
+settings.brightness: Brightness
+settings.brightness.auto: Automatic
 settings.theme: Theme
 settings.drawer: Drawer
 settings.marks: Privacy marks
@@ -77,6 +80,8 @@ features.cast: Cast receiver
 features.cast.hint: Cast from a phone or an app
 features.youtube: YouTube
 features.youtube.hint: When something is cast from YouTube
+features.rtsp: Camera stream
+features.rtsp.hint: RTSP on port 8554
 
 youtube.title: YouTube
 youtube.demand: Connect only when casting
@@ -179,3 +184,69 @@ visual.ink-in-water: Ink in Water
 visual.thunderstorm: Thunderstorm
 visual.fireflies: Fireflies
 visual.matrix: Matrix
+
+camera.starting: Starting the camera
+camera.reset: Reset to defaults
+camera.reset.confirm: Tap again to reset
+camera.group.picture: Picture
+camera.group.exposure: Exposure
+camera.group.whitebalance: White Balance
+camera.group.streams: Streams
+camera.setting.ev: Exposure compensation
+camera.setting.scene: Scene
+camera.setting.banding: Anti-banding
+camera.setting.iso: ISO
+camera.setting.whitebalance: White balance
+camera.setting.effect: Effect
+camera.setting.brightness: Brightness
+camera.setting.contrast: Contrast
+camera.setting.saturation: Saturation
+camera.setting.sharpness: Sharpness
+camera.setting.hue: Hue
+camera.setting.framerate_auto: Auto frame rate
+camera.setting.framerate: Frame rate
+camera.setting.main_on: Main stream
+camera.setting.main_size: Main resolution
+camera.setting.keyframe: Keyframe interval
+camera.setting.quality: Quality
+camera.option.quality.low: Low
+camera.option.quality.standard: Standard
+camera.option.quality.high: High
+camera.option.scene.auto: Auto
+camera.option.scene.portrait: Portrait
+camera.option.scene.landscape: Landscape
+camera.option.scene.night: Night
+camera.option.banding.auto: Auto
+camera.option.banding.off: "Off"
+camera.option.banding.50hz: 50 Hz
+camera.option.banding.60hz: 60 Hz
+camera.option.whitebalance.auto: Auto
+camera.option.whitebalance.incandescent: Incandescent
+camera.option.whitebalance.fluorescent: Fluorescent
+camera.option.whitebalance.warm-fluorescent: Warm fluorescent
+camera.option.whitebalance.daylight: Daylight
+camera.option.whitebalance.cloudy-daylight: Cloudy
+camera.option.whitebalance.twilight: Twilight
+camera.option.whitebalance.shade: Shade
+camera.option.effect.none: None
+camera.option.effect.mono: Mono
+camera.option.effect.negative: Negative
+camera.option.effect.sepia: Sepia
+camera.option.effect.aqua: Aqua
+camera.option.effect.whiteboard: Whiteboard
+camera.option.effect.blackboard: Blackboard
+camera.option.brightness.low: Low
+camera.option.brightness.middle: Medium
+camera.option.brightness.high: High
+camera.option.contrast.low: Low
+camera.option.contrast.middle: Medium
+camera.option.contrast.high: High
+camera.option.saturation.low: Low
+camera.option.saturation.middle: Medium
+camera.option.saturation.high: High
+camera.option.sharpness.low: Low
+camera.option.sharpness.middle: Medium
+camera.option.sharpness.high: High
+camera.option.hue.low: Low
+camera.option.hue.middle: Medium
+camera.option.hue.high: High

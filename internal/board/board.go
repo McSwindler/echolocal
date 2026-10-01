@@ -29,6 +29,9 @@ const (
 
 	// Shutter is a physical cover over the camera, reported as an EV_SW switch.
 	Shutter
+
+	// Camera is a vendor camera reached through cameraserver.
+	Camera
 )
 
 // Key is a physical control. The same button is a different code on different boards.
@@ -86,6 +89,9 @@ type Board struct {
 	// orientation. Only somebody looking at the device can say: a capture reads back through the
 	// same rotation it was drawn with, so it looks correct either way.
 	PanelRotation int
+
+	// CameraWidth and CameraHeight are a preview size the camera lists.
+	CameraWidth, CameraHeight int
 
 	// Service is the Amazon init service echod is installed as, StockLabel the SELinux label its
 	// binary carries before we replace it. Taking over a service is how echod gets init's

@@ -158,12 +158,12 @@ func (c *Controller) findShutter(devices []*input.Device) {
 		if !d.HasSwitch(input.SwCameraLensCover) {
 			continue
 		}
-		open, err := d.Switch(input.SwCameraLensCover)
+		covered, err := d.Switch(input.SwCameraLensCover)
 		if err != nil {
 			slog.Warn("reading the camera cover", "device", d.Path, "err", err)
 			return
 		}
-		c.setCovered(!open)
+		c.setCovered(covered)
 		return
 	}
 	slog.Warn("no camera cover on a board that should have one")
@@ -307,7 +307,7 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 			c.key(e, down)
 		case input.EvSw:
 			if c.shutter && e.Code == input.SwCameraLensCover {
-				c.setCovered(!open(e.Value))
+				c.setCovered(e.Value != 0)
 			}
 			if e.Code == input.SwMuteDevice {
 				c.setCut(e.Value != 0)
@@ -315,9 +315,6 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 		}
 	}
 }
-
-// 0 is covered and 1 is open, the opposite way up from the switch's name. Measured on checkers.
-func open(value int32) bool { return value != 0 }
 
 func (c *Controller) key(e input.Event, down map[uint16]*held) {
 	name, ok := keyFor(e.Code)

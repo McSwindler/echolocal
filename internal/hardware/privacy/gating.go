@@ -29,14 +29,16 @@ func (gating) HardwareToggles() bool { return true }
 
 func (gating) Lag() time.Duration { return 500 * time.Millisecond }
 
+// Checkers' kernel learns the latch is set only from a write to enable; cronos ignores a write while cut.
 func (g gating) Set(muted bool) error {
+	if muted {
+		return write(g.cut(), "1")
+	}
 	switch is, err := g.Get(); {
 	case err != nil:
 		return err
-	case is == muted:
+	case !is:
 		return nil
-	case muted:
-		return write(g.cut(), "1")
 	}
 	return errors.New("releasing the microphones needs the mute button")
 }

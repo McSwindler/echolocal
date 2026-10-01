@@ -6,6 +6,7 @@
 package settings
 
 import (
+	"slices"
 	"sync"
 
 	"golang.org/x/exp/shiny/materialdesign/icons"
@@ -47,3 +48,24 @@ func (s *Settings) Name() string { return "settings" }
 
 // Open puts the top of the settings up.
 func Open() { shell.Get().Push(root()) }
+
+var pages = map[string]func() *shell.Page{"settings": root}
+
+// OpenPage puts up a page by name, and reports whether there is one.
+func OpenPage(name string) bool {
+	page, ok := pages[name]
+	if ok {
+		shell.Get().Push(page())
+	}
+	return ok
+}
+
+// Pages is the names OpenPage knows.
+func Pages() []string {
+	out := make([]string, 0, len(pages))
+	for name := range pages {
+		out = append(out, name)
+	}
+	slices.Sort(out)
+	return out
+}

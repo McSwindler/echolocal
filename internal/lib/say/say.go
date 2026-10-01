@@ -275,4 +275,19 @@ func Load(tag string, yamlBody string) error {
 
 // Missing reports whether an identifier reads as itself, which is what T does for one nothing
 // defines.
-func Missing(id string) bool { return T(id) == id && strings.Contains(id, ".") }
+func Missing(id string) bool {
+	if !strings.Contains(id, ".") {
+		return false
+	}
+
+	mu.RLock()
+	l := local
+	mu.RUnlock()
+
+	if l == nil {
+		return true
+	}
+
+	out, _ := l.Localize(&i18n.LocalizeConfig{MessageID: id})
+	return out == "" || out == id
+}

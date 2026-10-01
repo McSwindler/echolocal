@@ -27,6 +27,8 @@ const (
 	SwMuteDevice      = 0x0e
 )
 
+const AbsX = 0x00
+
 // sizeof(struct input_event): a timeval of two kernel longs, then u16 type, u16 code, s32 value,
 // with the tail padded back out to the timeval's alignment. evdev rejects a read shorter than one
 // whole event with EINVAL rather than returning a truncated one, so this has to be right.

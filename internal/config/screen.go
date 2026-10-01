@@ -15,11 +15,34 @@ type Screen struct {
 
 	Hours HourFormat `json:"hours"`
 	Logo  bool       `json:"logo"`
+
+	// Backlight is the panel's level in manual, and what the automatic curve is shifted by in auto.
+	Backlight int        `json:"backlight"`
+	Mode      ScreenMode `json:"mode"`
 }
 
+const (
+	DefaultBacklight  = 70
+	DefaultScreenMode = ModeAuto
+)
+
 func defaultScreen() Screen {
-	return Screen{Theme: DefaultTheme, Drawer: DefaultEdge, Marks: true, Hours: TwentyFourHour, Logo: true}
+	return Screen{
+		Theme: DefaultTheme, Drawer: DefaultEdge, Marks: true, Hours: TwentyFourHour, Logo: true,
+		Backlight: DefaultBacklight, Mode: DefaultScreenMode,
+	}
 }
+
+// ScreenMode is how the brightness is decided.
+type ScreenMode string
+
+const (
+	// ModeAuto sets the brightness from the ambient light sensor.
+	ModeAuto ScreenMode = "auto"
+
+	// ModeManual holds whatever the backlight is set to.
+	ModeManual ScreenMode = "manual"
+)
 
 type HourFormat string
 
@@ -64,4 +87,12 @@ func (w ScreenWriter) Hours(v HourFormat) error {
 
 func (w ScreenWriter) Logo(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Logo = v })
+}
+
+func (w ScreenWriter) Backlight(v int) error {
+	return w.st.Update(func(c *Config) { c.Screen.Backlight = v })
+}
+
+func (w ScreenWriter) Mode(v ScreenMode) error {
+	return w.st.Update(func(c *Config) { c.Screen.Mode = v })
 }

@@ -60,7 +60,7 @@ func (r *Radio) Startup() component.Progress {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p := component.Progress{Done: r.up}
+	p := component.Progress{Done: r.up, Background: true}
 	switch {
 	case r.up:
 		p.Doing = "on " + r.ssid

@@ -87,6 +87,11 @@ NDK_CC = $(NDK)/toolchains/llvm/prebuilt/$(NDK_HOST)/bin/armv7a-linux-androideab
 SURFACE_SRC := native/echolocal-surface
 SURFACE_BIN := $(BUILD_DIR)/echolocal-surface-api$(SURFACE_API)
 SURFACE_STUBS := $(BUILD_DIR)/surface-stubs-api$(SURFACE_API)
+CAMSHIM_SRC := native/echolocal-camshim
+CAMSHIM_BIN := $(BUILD_DIR)/libecholocal-camshim-api$(SURFACE_API).so
+CAMERA_SRC := native/echolocal-camera
+CAMERA_BIN := $(BUILD_DIR)/echolocal-camera-api$(SURFACE_API)
+CAMERA_STUBS := $(BUILD_DIR)/camstubs-api$(SURFACE_API)
 
 PARTS_DIR := internal/parts/payload
 PART_BOARDS := $(shell grep -h '^//go:build' internal/parts/*.go 2>/dev/null | \
@@ -108,6 +113,23 @@ build-surface: ## Build the SurfaceFlinger helper with the NDK (SURFACE_API=25 f
 	$(NDK_CC) -O2 -Wall -Werror -o $(SURFACE_BIN) $(SURFACE_SRC)/surface.c $(SURFACE_SRC)/video.c $(SURFACE_SRC)/gl.c $(SURFACE_SRC)/drm.c $(SURFACE_SRC)/audio.c $(SURFACE_SRC)/wire.c \
 		-L$(SURFACE_STUBS) -lgui -lutils -lbinder -landroid -lmediandk -lEGL -lGLESv2 -llog -Wl,--allow-shlib-undefined
 
+.PHONY: build-camshim
+build-camshim: ## Build the camera service preload with the NDK
+	@test -x "$(NDK_CC)" || { echo "no NDK clang at $(NDK_CC); set NDK or ANDROID_NDK_HOME"; exit 1; }
+	@mkdir -p $(BUILD_DIR)
+	$(NDK_CC) -O2 -Wall -Werror -Wno-unused-parameter -shared -fPIC -o $(CAMSHIM_BIN) $(CAMSHIM_SRC)/camshim.c
+
+.PHONY: build-camera
+build-camera: ## Build the camera helper with the NDK
+	@test -x "$(NDK_CC)" || { echo "no NDK clang at $(NDK_CC); set NDK or ANDROID_NDK_HOME"; exit 1; }
+	@mkdir -p $(CAMERA_STUBS)
+	@for lib in camera_client gui utils binder stagefright; do \
+		up=$$(echo $$lib | tr a-z A-Z); \
+		$(NDK_CC) -shared -DLIB$$up -Wl,-soname,lib$$lib.so -o $(CAMERA_STUBS)/lib$$lib.so $(CAMERA_SRC)/stubs.c || exit 1; \
+	done
+	$(NDK_CC) -O2 -Wall -Werror -o $(CAMERA_BIN) $(CAMERA_SRC)/camera.c $(CAMERA_SRC)/still.c $(CAMERA_SRC)/turn_none.c $(CAMERA_SRC)/cam2.c \
+		-L$(CAMERA_STUBS) -lcamera_client -lgui -lutils -lbinder -lstagefright -lcamera2ndk -lmediandk -landroid -llog -lm -Wl,--allow-shlib-undefined
+
 .PHONY: test-surface
 test-surface: ## Run the SurfaceFlinger helper tests that need no device, with the host compiler
 	@mkdir -p $(BUILD_DIR)
@@ -125,9 +147,11 @@ build-echod: $(if $(filter $(BOARD),$(PART_BOARDS)),stage-parts) ## Cross-compil
 	$(DEVICE_ENV) go build $(DEVICE_TAGS) -ldflags "$(DEVICE_LDFLAGS)" -o $(DEVICE_BIN) ./cmd/echod
 
 .PHONY: stage-parts
-stage-parts: build-surface ## Stage the native parts echod embeds for the boards that carry them
+stage-parts: build-surface build-camshim build-camera ## Stage the native parts echod embeds for the boards that carry them
 	@mkdir -p $(PARTS_DIR)
 	cp $(SURFACE_BIN) $(PARTS_DIR)/echolocal-surface
+	cp $(CAMSHIM_BIN) $(PARTS_DIR)/libecholocal-camshim.so
+	cp $(CAMERA_BIN) $(PARTS_DIR)/echolocal-camera
 
 .PHONY: build-echod-all
 build-echod-all: ## Build every binary a release publishes, from a clean bin

@@ -65,6 +65,8 @@ type Driver struct {
 	// forced is a repaint nothing reported: the panel turning, or the stack changing.
 	forced bool
 
+	brightness int
+
 	// parting is set once a last frame is up: the picture stays until the process is gone, and
 	// anything still drawing on its way out does not get to land over it.
 	parting bool
@@ -179,12 +181,13 @@ func Get() *Driver { once.Do(func() { shared = NewDriver(layout.FBDevice) }); re
 // NewDriver is a driver over one framebuffer, for a tool that wants its own.
 func NewDriver(path string) *Driver {
 	return &Driver{
-		path:    path,
-		changed: make(chan struct{}, 1),
-		shots:   make(chan chan capture),
-		lasts:   make(chan lastFrame),
-		benches: make(chan benchRequest),
-		rot:     Mounted(),
+		path:       path,
+		changed:    make(chan struct{}, 1),
+		shots:      make(chan chan capture),
+		lasts:      make(chan lastFrame),
+		benches:    make(chan benchRequest),
+		rot:        Mounted(),
+		brightness: DefaultBrightness,
 	}
 }
 
@@ -216,7 +219,7 @@ func (d *Driver) Start(context.Context) error {
 	}
 
 	d.mu.Lock()
-	rot := d.rot
+	rot, brightness := d.rot, d.brightness
 	d.mu.Unlock()
 
 	// A panel opens at how the device is mounted; the device may have been turned since. Before it
@@ -233,8 +236,24 @@ func (d *Driver) Start(context.Context) error {
 	if old != nil {
 		old.Close()
 	}
-	slog.Info("panel", "geometry", info)
+	if err := SetBacklight(brightness); err != nil {
+		slog.Error("backlight", "err", err)
+	}
+	slog.Info("panel", "geometry", info, "brightness", brightness)
 	return nil
+}
+
+// Brightness sets the panel's backlight, as a percentage, and remembers it across a restart.
+func (d *Driver) Brightness(percent int) error {
+	d.mu.Lock()
+	d.brightness = percent
+	open := d.panel != nil
+	d.mu.Unlock()
+
+	if !open {
+		return nil
+	}
+	return SetBacklight(percent)
 }
 
 // Covered reports whether anything below a priority has something to draw.

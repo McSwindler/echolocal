@@ -80,12 +80,12 @@ func cover(d *input.Device) string {
 	if !d.HasSwitch(input.SwCameraLensCover) {
 		return ""
 	}
-	open, err := d.Switch(input.SwCameraLensCover)
+	covered, err := d.Switch(input.SwCameraLensCover)
 	if err != nil {
 		return fmt.Sprintf(" — camera cover: %v", err)
 	}
-	if open {
-		return " — camera cover: open"
+	if covered {
+		return " — camera cover: closed"
 	}
-	return " — camera cover: closed"
+	return " — camera cover: open"
 }

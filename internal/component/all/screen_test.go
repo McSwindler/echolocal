@@ -16,6 +16,9 @@ var screenOnly = []string{
 	"github.com/ygelfand/echolocal/internal/feature/idle",
 	"github.com/ygelfand/echolocal/internal/ui/visual",
 	"github.com/ygelfand/echolocal/internal/hardware/touch",
+	"github.com/ygelfand/echolocal/internal/ui/reveal",
+	"github.com/ygelfand/echolocal/internal/feature/brightness",
+	"github.com/ygelfand/echolocal/internal/hardware/alsps",
 }
 
 var castOnly = []string{
@@ -26,6 +29,15 @@ var castOnly = []string{
 	"github.com/ygelfand/echolocal/internal/lib/hls",
 	"github.com/ygelfand/echolocal/internal/lib/cenc",
 	"github.com/ygelfand/echolocal/internal/lib/cast",
+}
+
+var cameraOnly = []string{
+	"github.com/ygelfand/echolocal/internal/feature/livecam",
+	"github.com/ygelfand/echolocal/internal/feature/rtspd",
+	"github.com/ygelfand/echolocal/internal/feature/vision",
+	"github.com/ygelfand/echolocal/internal/hardware/mtkcamera",
+	"github.com/ygelfand/echolocal/internal/lib/rtsp",
+	"github.com/ygelfand/echolocal/internal/lib/onvif",
 }
 
 func goList(t *testing.T, tags, pkg string, flags ...string) []string {
@@ -59,15 +71,17 @@ func TestOnlyHelperBoardsEmbedTheHelper(t *testing.T) {
 		"board_cronos":   true,
 	} {
 		files := goList(t, tags, "github.com/ygelfand/echolocal/internal/parts", "-f", `{{join .EmbedPatterns " "}}`)
-		if got := slices.Contains(files, "payload/echolocal-surface"); got != want {
-			t.Errorf("%q embeds the helper %t, want %t (%v)", tags, got, want, files)
+		for _, part := range []string{"payload/echolocal-surface", "payload/echolocal-camera", "payload/libecholocal-camshim.so"} {
+			if got := slices.Contains(files, part); got != want {
+				t.Errorf("%q embeds %s %t, want %t (%v)", tags, part, got, want, files)
+			}
 		}
 	}
 }
 
 func TestTheSharedBuildLinksNoScreen(t *testing.T) {
 	deps := echodDeps(t, "")
-	for _, pkg := range append(screenOnly, castOnly...) {
+	for _, pkg := range slices.Concat(screenOnly, castOnly, cameraOnly) {
 		if slices.Contains(deps, pkg) {
 			t.Errorf("the shared echod links %s", pkg)
 		}
@@ -81,7 +95,7 @@ func TestOnlyTheShowsCast(t *testing.T) {
 		"board_rook":     false,
 	} {
 		deps := echodDeps(t, tag)
-		for _, pkg := range castOnly {
+		for _, pkg := range slices.Concat(castOnly, cameraOnly) {
 			if got := slices.Contains(deps, pkg); got != want {
 				t.Errorf("%s links %s %t, want %t", tag, pkg, got, want)
 			}

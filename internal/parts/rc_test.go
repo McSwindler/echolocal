@@ -29,7 +29,7 @@ func TestServiceNamesFitAndroid7(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{layout.Service, layout.SurfaceService} {
+	for _, want := range []string{layout.Service, layout.SurfaceService, layout.CameraService} {
 		if !slices.Contains(names, want) {
 			t.Errorf("no service %q in %v", want, names)
 		}

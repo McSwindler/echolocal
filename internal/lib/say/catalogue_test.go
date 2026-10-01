@@ -19,6 +19,10 @@ import (
 // call site. Written without an example of one, because this file is scanned too.
 var asks = regexp.MustCompile(`\b(?:say|text)\.[TFN]\("([^"]+)"`)
 
+var tables = regexp.MustCompile(`NewTable\("([^"]+)"`)
+
+var kinds = []string{".setting.", ".entity.", ".group.", ".option.", ".sums."}
+
 // dynamic is the identifiers resolved without a literal at the call site, which the scan cannot
 // see. Each one needs a reason.
 var dynamic = map[string]string{
@@ -44,6 +48,14 @@ func TestEveryIdentifierTheCodeAsksForExists(t *testing.T) {
 		body, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		for _, m := range tables.FindAllSubmatch(body, -1) {
+			domain := string(m[1])
+			for _, kind := range kinds {
+				families = append(families, domain+kind)
+			}
+			used[domain+".disabled"] = true
 		}
 
 		for _, m := range asks.FindAllSubmatch(body, -1) {

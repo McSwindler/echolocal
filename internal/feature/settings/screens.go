@@ -7,6 +7,7 @@ import (
 	"golang.org/x/exp/shiny/materialdesign/icons"
 
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/feature/brightness"
 	"github.com/ygelfand/echolocal/internal/feature/privacy"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	apptheme "github.com/ygelfand/echolocal/internal/feature/theme"
@@ -21,26 +22,38 @@ func open(v shell.View) func(int) { return func(int) { shell.Get().Push(v) } }
 
 func percent(v int) string { return strconv.Itoa(v) + "%" }
 
+type section struct {
+	label string
+	icon  ui.Icon
+	page  func() *shell.Page
+}
+
+var sections []section
+
 // root is the top of the settings.
 func root() *shell.Page {
 	return &shell.Page{
 		Title: say.T("settings.title"),
 		Build: func() ([]widget.Row, []func(int)) {
-			return []widget.Row{
-					{Label: say.T("settings.display"), Kind: widget.Chevron,
-						Icon: icons.ActionSettingsBrightness, Value: config.Get().Screen.Theme},
-					{Label: say.T("settings.volume"), Kind: widget.Chevron,
-						Icon:  icons.HardwareSpeaker,
-						Value: percent(volume.Get().Level(config.StreamMain))},
-					{Label: say.T("settings.features"), Kind: widget.Chevron,
-						Icon: icons.ActionExtension, Value: featuresOn()},
-					{Label: say.T("settings.debug"), Kind: widget.Chevron, Icon: icons.ActionBugReport},
-				}, []func(int){
-					open(displayPage()),
-					open(volume.Page()),
-					open(featuresPage()),
-					open(debugPage()),
-				}
+			rows := []widget.Row{
+				{Label: say.T("settings.display"), Kind: widget.Chevron,
+					Icon: icons.ActionSettingsBrightness, Value: config.Get().Screen.Theme},
+				{Label: say.T("settings.volume"), Kind: widget.Chevron,
+					Icon:  icons.HardwareSpeaker,
+					Value: percent(volume.Get().Level(config.StreamMain))},
+			}
+			taps := []func(int){open(displayPage()), open(volume.Page())}
+			for _, s := range sections {
+				rows = append(rows, widget.Row{Label: say.T(s.label), Kind: widget.Chevron, Icon: s.icon})
+				taps = append(taps, open(s.page()))
+			}
+			rows = append(rows,
+				widget.Row{Label: say.T("settings.features"), Kind: widget.Chevron,
+					Icon: icons.ActionExtension, Value: featuresOn()},
+				widget.Row{Label: say.T("settings.debug"), Kind: widget.Chevron, Icon: icons.ActionBugReport},
+			)
+			taps = append(taps, open(featuresPage()), open(debugPage()))
+			return rows, taps
 		},
 	}
 }
@@ -53,6 +66,10 @@ func displayPage() *shell.Page {
 			cfg := config.Get()
 
 			return []widget.Row{
+					{Label: say.T("settings.brightness"), Kind: widget.Slider,
+						Icon: icons.ImageBrightness6, Level: cfg.Screen.Backlight, Value: percent(cfg.Screen.Backlight)},
+					{Label: say.T("settings.brightness.auto"), Kind: widget.Toggle,
+						Icon: icons.DeviceBrightnessAuto, On: cfg.Screen.Mode == config.ModeAuto},
 					{Label: say.T("settings.theme"), Kind: widget.Chevron,
 						Icon: icons.ImagePalette, Value: cfg.Screen.Theme},
 					{Label: say.T("settings.clock"), Kind: widget.Chevron,
@@ -64,6 +81,8 @@ func displayPage() *shell.Page {
 					{Label: say.T("settings.marks"), Kind: widget.Toggle,
 						Icon: icons.ActionVisibilityOff, On: cfg.Screen.Marks},
 				}, []func(int){
+					func(level int) { brightness.Get().SetLevel(level) },
+					func(int) { brightness.Get().SetAuto(cfg.Screen.Mode != config.ModeAuto) },
 					open(themePage()),
 					open(clockPage()),
 					open(idlePage()),

@@ -273,7 +273,7 @@ func (r *Registry) Progress() []Progress {
 // Ready reports whether everything the boot screen waits for is up.
 func (r *Registry) Ready() bool {
 	for _, p := range r.Progress() {
-		if !p.Settled() {
+		if !p.Settled() && !p.Background {
 			return false
 		}
 	}

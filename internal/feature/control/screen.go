@@ -81,6 +81,7 @@ func showing() []*cobra.Command {
 	}
 
 	panel.AddCommand(shot, tap, swipe, thumbsCommand())
+	panel.AddCommand(panelCommands()...)
 	return []*cobra.Command{panel, setCommand()}
 }
 

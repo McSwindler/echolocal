@@ -44,6 +44,8 @@ type Config struct {
 	Visual     Visual     `json:"visual"`
 	Idle       Idle       `json:"idle"`
 	Cast       Cast       `json:"cast"`
+	Camera     Camera     `json:"camera"`
+	RTSP       RTSP       `json:"rtsp"`
 	Network    Network    `json:"network"`
 	API        API        `json:"api"`
 }
@@ -71,6 +73,8 @@ func Defaults() Config {
 		Visual:     defaultVisual(),
 		Idle:       defaultIdle(),
 		Cast:       defaultCast(),
+		Camera:     defaultCamera(),
+		RTSP:       defaultRTSP(),
 
 		// Only the stop word. The slots are absent until something chooses one, and Slot fills in the
 		// defaults for whichever have not been.
@@ -112,6 +116,8 @@ func (w Writer) Clock() ClockWriter           { return ClockWriter(w) }
 func (w Writer) Visual() VisualWriter         { return VisualWriter(w) }
 func (w Writer) Idle() IdleWriter             { return IdleWriter(w) }
 func (w Writer) Cast() CastWriter             { return CastWriter(w) }
+func (w Writer) Camera() CameraWriter         { return CameraWriter(w) }
+func (w Writer) RTSP() RTSPWriter             { return RTSPWriter(w) }
 func (w Writer) Network() NetworkWriter       { return NetworkWriter(w) }
 func (w Writer) API() APIWriter               { return APIWriter(w) }
 

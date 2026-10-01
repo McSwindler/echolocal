@@ -140,6 +140,7 @@ func subDevices(name string, ents []esphome.Entity) []esphome.Device {
 		{ID: component.DeviceMicrophone, Name: name + " microphone"},
 		{ID: component.DevicePlayback, Name: name + " playback"},
 		{ID: component.DeviceScreen, Name: name + " screen"},
+		{ID: component.DeviceCamera, Name: name + " camera"},
 	}
 	for slot := range wakeword.Slots {
 		all = append(all, esphome.Device{

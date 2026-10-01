@@ -15,6 +15,7 @@ import (
 	apptheme "github.com/ygelfand/echolocal/internal/feature/theme"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/touch"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
@@ -128,6 +129,8 @@ type Shell struct {
 	// idle puts away the rest and leaves these.
 	holds map[View]bool
 
+	Changed hook.Hook[Change]
+
 	claim *display.Claim
 
 	// covering is what the held claim was taken as, so a view that covers replaces one that does
@@ -237,6 +240,21 @@ func (s *Shell) refuses(v View) bool {
 	return !ok || !w.Wakes()
 }
 
+type Change struct{ From, To View }
+
+func (s *Shell) top() View {
+	if n := len(s.stack); n > 0 {
+		return s.stack[n-1]
+	}
+	return nil
+}
+
+func (s *Shell) changed(from, to View) {
+	if from != to {
+		s.Changed.Emit(Change{From: from, To: to})
+	}
+}
+
 // Push puts a view on top, sliding it in from the side.
 func (s *Shell) Push(v View) {
 	s.mu.Lock()
@@ -244,15 +262,13 @@ func (s *Shell) Push(v View) {
 		s.mu.Unlock()
 		return
 	}
-	var under View
-	if n := len(s.stack); n > 0 {
-		under = s.stack[n-1]
-	}
+	under := s.top()
 	s.stack = append(s.stack, v)
 
 	m := begin(under, v, false)
 	s.sliding = m
 	s.mu.Unlock()
+	s.changed(under, v)
 
 	s.wake()
 	s.start(m)
@@ -342,6 +358,7 @@ func (h *Hold) Held() bool {
 // remove takes one view out of the stack wherever it is.
 func (s *Shell) remove(v View) {
 	s.mu.Lock()
+	from := s.top()
 	for i, have := range s.stack {
 		if have == v {
 			s.stack = append(s.stack[:i], s.stack[i+1:]...)
@@ -354,7 +371,9 @@ func (s *Shell) remove(v View) {
 	if s.sliding != nil && s.sliding.from == v {
 		s.sliding = nil
 	}
+	to := s.top()
 	s.mu.Unlock()
+	s.changed(from, to)
 
 	if empty {
 		s.Close()
@@ -379,7 +398,9 @@ func (s *Shell) Pop() {
 		m = begin(gone, s.stack[len(s.stack)-1], true)
 		s.sliding = m
 	}
+	to := s.top()
 	s.mu.Unlock()
+	s.changed(gone, to)
 
 	if empty {
 		s.Close()
@@ -393,12 +414,14 @@ func (s *Shell) Pop() {
 // Close puts everything away and gives the panel back.
 func (s *Shell) Close() {
 	s.mu.Lock()
+	from := s.top()
 	claim, timer := s.claim, s.timer
 	s.closed = time.Now()
 	s.stack, s.claim, s.timer, s.held = nil, nil, nil, nil
 	s.sliding = nil
 	clear(s.holds)
 	s.mu.Unlock()
+	s.changed(from, nil)
 
 	if timer != nil {
 		timer.Stop()
@@ -499,6 +522,7 @@ func rank(draw []View) display.Priority {
 // while it plays and the screens over it go.
 func (s *Shell) idled() {
 	s.mu.Lock()
+	from := s.top()
 	kept := make([]View, 0, len(s.stack))
 	for _, v := range s.stack {
 		if s.holds[v] {
@@ -508,7 +532,9 @@ func (s *Shell) idled() {
 	s.stack = kept
 	empty := len(s.stack) == 0
 	s.sliding = nil
+	to := s.top()
 	s.mu.Unlock()
+	s.changed(from, to)
 
 	if empty {
 		s.Close()

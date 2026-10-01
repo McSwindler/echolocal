@@ -161,20 +161,13 @@ func (m *Mute) Restore(c config.Config) {
 	if m.line == nil {
 		return
 	}
-	was, err := m.line.Get()
-	if err != nil {
-		slog.Error("reading mute state failed", "err", err)
-		return
-	}
 
 	// What to show while cut, before cutting, so the ring is right the first time settled looks.
 	component.RestoreEffect(m.ring, c.Ring.Muted, nil, config.Set().Ring().Muted)
 
 	want := c.Microphone.Muted
-	if want != was {
-		if err := m.line.Set(want); err != nil {
-			slog.Error("setting mute failed", "muted", want, "err", err)
-		}
+	if err := m.line.Set(want); err != nil {
+		slog.Error("setting mute failed", "muted", want, "err", err)
 	}
 	m.settled(false)
 	slog.Info("restored", "what", "microphone mute", "muted", m.sw.Get(), "asked", want)
