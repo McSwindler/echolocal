@@ -1,6 +1,25 @@
 package device
 
-import "testing"
+import (
+	"os/exec"
+	"testing"
+)
+
+func TestDroppedKnowsAdbLosingTheDevice(t *testing.T) {
+	for script, want := range map[string]bool{
+		`echo "adb: device 'G6G11B060465021X' not found" >&2; exit 1`: true,
+		`echo "adb: device offline" >&2; exit 1`:                      true,
+		`echo "adb: no devices/emulators found" >&2; exit 1`:          true,
+		`exit 255`:                              true,
+		`echo "adb: error: closed" >&2; exit 1`: false,
+		`exit 0`:                                false,
+	} {
+		_, err := output(exec.Command("sh", "-c", script))
+		if got := Dropped(err); got != want {
+			t.Errorf("%s: dropped %t, want %t", script, got, want)
+		}
+	}
+}
 
 func TestSplitRC(t *testing.T) {
 	tests := []struct {

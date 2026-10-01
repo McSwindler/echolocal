@@ -17,9 +17,19 @@ func TestBiscuitIsWhatItAlwaysWas(t *testing.T) {
 		RingTrouble: "Alert",
 		RingMuted:   "",
 		MinCores:    2,
+
+		VisualizerLift: 10,
 	}
 	if got != want {
 		t.Errorf("biscuit's defaults are %+v, want %+v", got, want)
+	}
+}
+
+func TestTheShowsStartTheVisualsUnlifted(t *testing.T) {
+	for _, b := range []board.Board{board.Checkers, board.Cronos} {
+		if got := For(b).VisualizerLift; got != 0 {
+			t.Errorf("%s lifts the visuals %d dB, want 0", b.Codename, got)
+		}
 	}
 }
 

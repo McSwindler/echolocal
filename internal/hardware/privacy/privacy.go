@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/hardware/buttons"
 )
 
 // Mute is the hardware microphone cut.
@@ -38,7 +39,7 @@ type LED interface {
 // Microphone is the mute.
 func Microphone() (Mute, error) {
 	if dir := component.Board().MuteDir; dir != "" {
-		return gating{dir}, nil
+		return gating{dir: dir, sw: buttons.Get().MuteSwitch}, nil
 	}
 	if present(state) {
 		return driver{}, nil

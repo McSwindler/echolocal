@@ -13,7 +13,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/touch"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
@@ -37,6 +37,7 @@ const (
 	OrderDisplay  = 20
 	OrderSettings = 30
 	OrderPlayer   = 40
+	OrderIdle     = 50
 )
 
 // Entry is one icon on the rail and what it opens.
@@ -168,13 +169,7 @@ func (r *Rail) where() (ui.Rect, []ui.Rect) {
 
 // picture is the screen as it is being viewed. The panel reports viewed coordinates already, since
 // the rotation is fixed on these boards.
-func picture() (w, h int) {
-	p := screen.Get().Panel()
-	if p == nil {
-		return 0, 0
-	}
-	return p.Width, p.Height
-}
+func picture() (w, h int) { return display.Get().Size() }
 
 // asTouch is the same edge as the touchscreen names it.
 func asTouch(e config.Edge) touch.Edge {

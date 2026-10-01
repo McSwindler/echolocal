@@ -42,6 +42,16 @@ func Mark(onDark bool) image.Image {
 	return Logo()
 }
 
+// MarkWidth is how wide the mark comes out at a height.
+func MarkWidth(h int) int {
+	img := Logo()
+	if img == nil || img.Bounds().Dy() == 0 {
+		return h
+	}
+	b := img.Bounds()
+	return b.Dx() * h / b.Dy()
+}
+
 // DrawLogo paints the mark to fit inside a box, keeping its proportions and centred in whatever
 // room is left over. on is the background it is composited against.
 func DrawLogo(s Surface, r Rect, on theme.Color) {

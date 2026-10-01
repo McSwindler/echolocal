@@ -87,3 +87,6 @@ func Stop(service string) error { return Set("ctl.stop", service) }
 
 // Start asks init to start a service.
 func Start(service string) error { return Set("ctl.start", service) }
+
+// Restart asks init to restart a service.
+func Restart(service string) error { return Set("ctl.restart", service) }

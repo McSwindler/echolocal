@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Event types we care about.
@@ -23,6 +24,7 @@ const (
 // Switch codes, of which only what something reads is named.
 const (
 	SwCameraLensCover = 0x09
+	SwMuteDevice      = 0x0e
 )
 
 // sizeof(struct input_event): a timeval of two kernel longs, then u16 type, u16 code, s32 value,
@@ -43,6 +45,11 @@ type Event struct {
 	Type      uint16
 	Code      uint16
 	Value     int32
+}
+
+// At is when the kernel stamped the event.
+func (e Event) At() time.Duration {
+	return time.Duration(e.Sec)*time.Second + time.Duration(e.Usec)*time.Microsecond
 }
 
 func (e Event) TypeName() string {

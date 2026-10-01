@@ -34,10 +34,12 @@ func root() *shell.Page {
 						Value: percent(volume.Get().Level(config.StreamMain))},
 					{Label: say.T("settings.features"), Kind: widget.Chevron,
 						Icon: icons.ActionExtension, Value: featuresOn()},
+					{Label: say.T("settings.debug"), Kind: widget.Chevron, Icon: icons.ActionBugReport},
 				}, []func(int){
 					open(displayPage()),
 					open(volume.Page()),
 					open(featuresPage()),
+					open(debugPage()),
 				}
 		},
 	}
@@ -53,12 +55,18 @@ func displayPage() *shell.Page {
 			return []widget.Row{
 					{Label: say.T("settings.theme"), Kind: widget.Chevron,
 						Icon: icons.ImagePalette, Value: cfg.Screen.Theme},
+					{Label: say.T("settings.clock"), Kind: widget.Chevron,
+						Icon: icons.DeviceAccessTime, Value: cfg.Clock.Face.Label()},
+					{Label: say.T("settings.idle"), Kind: widget.Chevron,
+						Icon: icons.ImageBrightness3, Value: cfg.Idle.After.Label()},
 					{Label: say.T("settings.drawer"), Kind: widget.Chevron,
 						Icon: icons.NavigationMenu, Value: cfg.Screen.Drawer.Label()},
 					{Label: say.T("settings.marks"), Kind: widget.Toggle,
 						Icon: icons.ActionVisibilityOff, On: cfg.Screen.Marks},
 				}, []func(int){
 					open(themePage()),
+					open(clockPage()),
+					open(idlePage()),
 					open(drawerPage()),
 					func(int) { privacy.Get().SetMarks(!cfg.Screen.Marks) },
 				}

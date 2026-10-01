@@ -18,10 +18,12 @@ import (
 	_ "github.com/ygelfand/echolocal/internal/component/all"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/defaults"
+	"github.com/ygelfand/echolocal/internal/feature/firmware"
 	"github.com/ygelfand/echolocal/internal/feature/voice"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/metrics"
 	"github.com/ygelfand/echolocal/internal/layout"
+	"github.com/ygelfand/echolocal/internal/parts"
 	"github.com/ygelfand/echolocal/internal/service"
 	"github.com/ygelfand/echolocal/internal/update"
 )
@@ -70,6 +72,7 @@ func Run(ctx context.Context) error {
 	// The boot hooks are what undoes a bad update, so they are kept current by the running binary rather
 	// than only by an install. Writes nothing when nothing differs.
 	update.Ensure()
+	firmware.Get().RebootPending(parts.Ensure())
 
 	// restarting is the reason echod is going away, and empty means it is not.
 	var restarting string

@@ -1,5 +1,7 @@
 package board
 
+import "github.com/ygelfand/echolocal/internal/layout"
+
 // Checkers is the 1st-generation Echo Show 5.
 var Checkers = Board{
 	Device:        "checkers",
@@ -13,8 +15,6 @@ var Checkers = Board{
 	Keys:    map[uint16]Key{116: Mute},
 	MuteDir: "/sys/devices/platform/amazon-gating",
 
-	// surfaceflinger holds /dev/graphics/fb0.
-	Service:     "/system/bin/surfaceflinger",
-	ServiceName: "surfaceflinger",
-	StockLabel:  "u:object_r:surfaceflinger_exec:s0",
+	Service:     layout.Binary,
+	ServiceName: layout.Service,
 }

@@ -33,11 +33,14 @@ var checkers = Profile{
 		"gatekeeperd",
 		"keystore",
 		"audioserver",
+	}, services.Disabled...),
+
+	// The helper decodes video and audio and reaches the camera through these.
+	Enable: append([]string{
 		"media",
 		"mediacodec",
 		"mediadrm",
 		"mediaextractor",
 		"cameraserver",
-	}, services.Disabled...),
-	Enable: services.Enabled,
+	}, services.Enabled...),
 }

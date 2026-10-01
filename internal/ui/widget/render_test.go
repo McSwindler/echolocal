@@ -16,9 +16,9 @@ import (
 // Writes each screen out so the design can be looked at rather than reasoned about. Off by
 // default: it is a darkroom, not a check.
 func TestRenderScreens(t *testing.T) {
-	dir := os.Getenv("ECHOLOCAL_RENDER")
+	dir := os.Getenv("LANOVO_RENDER")
 	if dir == "" {
-		t.Skip("set ECHOLOCAL_RENDER to a directory to write the screens out")
+		t.Skip("set LANOVO_RENDER to a directory to write the screens out")
 	}
 
 	const w, h = 1920, 1200
@@ -58,6 +58,18 @@ func TestRenderScreens(t *testing.T) {
 		m.DrawPage(img, p, palette)
 		write(t, dir+"/"+name+".png", img, w, h)
 	}
+
+	scrolled := long(14, 0)
+	for i := range scrolled.Rows {
+		if i%3 == 1 {
+			scrolled.Rows[i] = Row{Label: scrolled.Rows[i].Label, Kind: Slider, Level: 20 + i*5}
+		}
+	}
+	img := ui.NewImage(w, h, palette.Background)
+	scrolled.Scroll = m.DrawScrolled(img, scrolled, palette).Overflow / 2
+	img = ui.NewImage(w, h, palette.Background)
+	m.DrawScrolled(img, scrolled, palette)
+	write(t, dir+"/scrolled.png", img, w, h)
 }
 
 func write(t *testing.T, path string, src *ui.Image, w, h int) {

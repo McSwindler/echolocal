@@ -1,45 +1,21 @@
 package player
 
 import (
-	"log/slog"
-	"sync"
-
 	"github.com/ygelfand/echolocal/internal/feature/media"
 	"github.com/ygelfand/echolocal/internal/ui"
+	"github.com/ygelfand/echolocal/internal/ui/mark"
 )
 
-// The album art, decoded once and kept until a different picture arrives. It is drawn every
-// redraw and arrives once.
-var art struct {
-	mu   sync.Mutex
-	id   uint64
-	img  *ui.Image
-	said bool
-}
+func cover(now media.Now) *ui.Image { return ui.Picture(now.Art, now.ArtID) }
 
-// cover is the artwork to draw, and nil where there is none or it would not decode.
-func cover(now media.Now) *ui.Image {
-	art.mu.Lock()
-	defer art.mu.Unlock()
-
-	if now.ArtID == art.id {
-		return art.img
+func kindIcon(k media.Kind) ui.Icon {
+	switch k {
+	case media.FromBluetooth:
+		return mark.Bluetooth
+	case media.FromGroup:
+		return mark.Speakers
+	case media.FromCast:
+		return mark.Chromecast
 	}
-	art.id, art.img, art.said = now.ArtID, nil, false
-
-	if len(now.Art) == 0 {
-		return nil
-	}
-
-	img, err := ui.Decode(now.Art)
-	if err != nil {
-		if !art.said {
-			slog.Warn("the album art would not decode", "bytes", len(now.Art), "err", err)
-			art.said = true
-		}
-		return nil
-	}
-
-	art.img = img
-	return art.img
+	return mark.HomeAssistant
 }

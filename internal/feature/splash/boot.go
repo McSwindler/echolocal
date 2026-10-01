@@ -4,7 +4,7 @@ import (
 	"image"
 
 	"github.com/ygelfand/echolocal/internal/component"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/ui"
 	uitheme "github.com/ygelfand/echolocal/internal/ui/theme"
 )
@@ -19,18 +19,20 @@ const (
 )
 
 // drawBoot paints the mark beside what the device is still waiting for.
-func drawBoot(p *screen.Panel, t uitheme.Theme, progress []component.Progress) {
-	bg := colour(t.Background)
-	p.Fill(bg)
+func drawBoot(p *display.Panel, t uitheme.Theme, progress []component.Progress) {
+	s := ui.Of(p)
+	ui.Fill(s, t.Background)
 
-	logo, list := split(p.Bounds())
-	p.Draw(ui.Mark(t.Dark), inset(logo, min(logo.Dx(), logo.Dy())/8), bg)
+	logo, list := split(bounds(p))
+	ui.DrawLogo(s, box(inset(logo, min(logo.Dx(), logo.Dy())/8)), t.Background)
 
 	if len(progress) == 0 {
 		return
 	}
-	rows(ui.Of(p), box(list), t, progress)
+	rows(s, box(list), t, progress)
 }
+
+func bounds(p *display.Panel) image.Rectangle { return image.Rect(0, 0, p.Width, p.Height) }
 
 // split is where the mark goes and where the list goes.
 func split(in image.Rectangle) (logo, list image.Rectangle) {

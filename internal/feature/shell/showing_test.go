@@ -3,7 +3,7 @@ package shell
 import (
 	"testing"
 
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
@@ -81,7 +81,7 @@ func TestUrgencyIsTakenFromAnywhereInTheStack(t *testing.T) {
 	ringing := &page{name: "ringing", covers: true, urgent: true}
 	volume := &page{name: "volume"}
 
-	if got := rank([]View{ringing, volume}); got != screen.PriorityAlert {
+	if got := rank([]View{ringing, volume}); got != display.PriorityAlert {
 		t.Errorf("a notice over an alarm is drawn at %v, want the alarm's priority", got)
 	}
 }
@@ -90,8 +90,8 @@ func TestAnOrdinaryStackIsNotUrgent(t *testing.T) {
 	settings := &page{name: "settings", covers: true}
 	volume := &page{name: "volume"}
 
-	if got := rank([]View{settings, volume}); got != screen.PriorityUI {
-		t.Errorf("an ordinary screen is drawn at %v, want %v", got, screen.PriorityUI)
+	if got := rank([]View{settings, volume}); got != display.PriorityUI {
+		t.Errorf("an ordinary screen is drawn at %v, want %v", got, display.PriorityUI)
 	}
 }
 

@@ -1,5 +1,7 @@
 package board
 
+import "github.com/ygelfand/echolocal/internal/layout"
+
 // Cronos is the 2nd-generation Echo Show 5.
 var Cronos = Board{
 	Device:        "cronos",
@@ -11,7 +13,6 @@ var Cronos = Board{
 	Keys:          map[uint16]Key{116: Mute},
 	MuteDir:       "/sys/devices/platform/gpio-privacy",
 
-	Service:     "/system/bin/surfaceflinger",
-	ServiceName: "surfaceflinger",
-	StockLabel:  "u:object_r:surfaceflinger_exec:s0",
+	Service:     layout.Binary,
+	ServiceName: layout.Service,
 }

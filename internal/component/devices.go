@@ -29,5 +29,8 @@ const (
 	DeviceAssistant
 )
 
+// DeviceScreen is the panel's settings, on a board that has one.
+const DeviceScreen uint32 = 100
+
 // AssistantDevice is the sub-device holding one slot's settings.
 func AssistantDevice(slot int) uint32 { return DeviceAssistant + uint32(slot) }

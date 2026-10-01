@@ -40,6 +40,10 @@ type Config struct {
 	Media      Media      `json:"media"`
 	Sendspin   Sendspin   `json:"sendspin"`
 	Screen     Screen     `json:"screen"`
+	Clock      Clock      `json:"clock"`
+	Visual     Visual     `json:"visual"`
+	Idle       Idle       `json:"idle"`
+	Cast       Cast       `json:"cast"`
 	Network    Network    `json:"network"`
 	API        API        `json:"api"`
 }
@@ -63,6 +67,10 @@ func Defaults() Config {
 		Media:      defaultMedia(),
 		Sendspin:   defaultSendspin(),
 		Screen:     defaultScreen(),
+		Clock:      defaultClock(),
+		Visual:     defaultVisual(),
+		Idle:       defaultIdle(),
+		Cast:       defaultCast(),
 
 		// Only the stop word. The slots are absent until something chooses one, and Slot fills in the
 		// defaults for whichever have not been.
@@ -100,6 +108,10 @@ func (w Writer) Diag() DiagWriter             { return DiagWriter(w) }
 func (w Writer) Media() MediaWriter           { return MediaWriter(w) }
 func (w Writer) Sendspin() SendspinWriter     { return SendspinWriter(w) }
 func (w Writer) Screen() ScreenWriter         { return ScreenWriter(w) }
+func (w Writer) Clock() ClockWriter           { return ClockWriter(w) }
+func (w Writer) Visual() VisualWriter         { return VisualWriter(w) }
+func (w Writer) Idle() IdleWriter             { return IdleWriter(w) }
+func (w Writer) Cast() CastWriter             { return CastWriter(w) }
 func (w Writer) Network() NetworkWriter       { return NetworkWriter(w) }
 func (w Writer) API() APIWriter               { return APIWriter(w) }
 

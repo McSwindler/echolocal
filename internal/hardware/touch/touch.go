@@ -13,7 +13,7 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/input"
 	"github.com/ygelfand/echolocal/internal/service"
@@ -35,9 +35,22 @@ var Contacts hook.Hook[Contact]
 var Gestures hook.Hook[Gesture]
 
 type Touch struct {
-	mu  sync.Mutex
-	dev *input.Device
-	rec *Recognizer
+	mu   sync.Mutex
+	dev  *input.Device
+	rec  *Recognizer
+	last time.Time
+}
+
+var started = time.Now()
+
+// Since is how long it has been since a finger was on the panel, or since start-up if one never was.
+func (t *Touch) Since() time.Duration {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.last.IsZero() {
+		return time.Since(started)
+	}
+	return time.Since(t.last)
 }
 
 // recognize feeds a contact to the recognizer, sized from the panel the first time it is needed.
@@ -45,11 +58,7 @@ type Touch struct {
 func (t *Touch) recognize(c Contact) (Gesture, bool) {
 	t.mu.Lock()
 	if t.rec == nil {
-		w, h := 0, 0
-		if p := screen.Get().Panel(); p != nil {
-			w, h = p.Width, p.Height
-		}
-		t.rec = NewRecognizer(w, h)
+		t.rec = NewRecognizer(display.Get().Size())
 	}
 	rec := t.rec
 	t.mu.Unlock()
@@ -133,6 +142,10 @@ func (t *Touch) Run(ctx context.Context) error {
 
 // Feed puts one contact through, as a finger on the panel and as whatever gesture it completes.
 func (t *Touch) Feed(c Contact) {
+	t.mu.Lock()
+	t.last = time.Now()
+	t.mu.Unlock()
+
 	Contacts.Emit(c)
 
 	if g, ok := t.recognize(c); ok {
@@ -147,14 +160,14 @@ func (t *Touch) Feed(c Contact) {
 // Said once: passing these off as viewed coordinates silently would put every touch in the wrong
 // place on a device where nothing looked broken.
 func place(px, py int) (int, int) {
-	p := screen.Get().Panel()
-	if p == nil {
+	fw, fh := display.Get().Native()
+	if fw == 0 {
 		unplaced.Do(func() {
 			slog.Warn("no panel, so touches are reported where the hardware put them")
 		})
 		return px, py
 	}
-	return p.Viewed(px, py)
+	return display.Get().Orientation().Unproject(fw, fh, px, py)
 }
 
 var unplaced sync.Once

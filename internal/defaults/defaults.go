@@ -30,6 +30,9 @@ type Set struct {
 
 	// MinCores is how many cores are held online that the governor would otherwise park.
 	MinCores int
+
+	// VisualizerLift is how far the microphone is raised for the visuals, in dB.
+	VisualizerLift int
 }
 
 // biscuit is every value as it was measured on a 2nd-generation Echo Dot, which is the only board
@@ -51,12 +54,23 @@ var biscuit = Set{
 	RingMuted: "",
 
 	MinCores: 2,
+
+	VisualizerLift: 10,
+}
+
+func show5() Set {
+	s := biscuit
+	// Quiet speech pegged the classic VU at LANovo's 18.
+	s.VisualizerLift = 0
+	return s
 }
 
 // sets is the boards somebody has measured. A board gets an entry when there is a device to measure
 // it on, and not before.
 var sets = map[string]Set{
-	board.Biscuit.Device: biscuit,
+	board.Biscuit.Device:  biscuit,
+	board.Checkers.Device: show5(),
+	board.Cronos.Device:   show5(),
 }
 
 // For is what a board starts from, biscuit's where it has no set of its own.

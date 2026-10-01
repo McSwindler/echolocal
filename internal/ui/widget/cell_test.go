@@ -107,6 +107,24 @@ func TestTwelveTilesFitThePanel(t *testing.T) {
 	}
 }
 
+func TestAShapedGridTakesItsShape(t *testing.T) {
+	m := panel()
+	body := ui.Rect{W: 1200, H: 1600}
+
+	for _, shape := range []float64{0.625, 1.6} {
+		got := m.CellsShaped(body, 4, 4, shape)
+		if len(got) != 4 {
+			t.Fatalf("shape %v: %d tiles, want 4", shape, len(got))
+		}
+		if tall := float64(got[0].H) / float64(got[0].W); tall < shape-0.02 || tall > shape+0.02 {
+			t.Errorf("shape %v: tile %dx%d", shape, got[0].W, got[0].H)
+		}
+	}
+	if got, want := m.CellsShaped(body, 1, 4, 0)[0], m.Cells(body, 1, 4)[0]; got != want {
+		t.Errorf("unshaped tile %v, want %v", got, want)
+	}
+}
+
 func TestAGridOfNothingIsNothing(t *testing.T) {
 	m := panel()
 

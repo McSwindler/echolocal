@@ -81,6 +81,7 @@ var steps = []step{
 	{"hide Amazon packages", hidePackages},
 	{"clear the saved usb config", clearUSBConfig},
 	{"install echod", installBinary},
+	{"install the echod service", installService},
 	{"run echod as root", serviceAsRoot},
 	{"take over the service", takeOverService},
 	{"disable the boot animation", disableBootAnimation},
@@ -294,6 +295,10 @@ func stopService(r *run) (string, bool, error) {
 		}
 		if state == "stopped" {
 			return state, false, nil
+		}
+		// init has not read a service definition this run wrote.
+		if state == "" {
+			return "not defined until the next boot", true, nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

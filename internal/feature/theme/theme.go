@@ -13,7 +13,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
@@ -103,5 +103,5 @@ func (t *Theme) apply(name string) {
 
 	t.sel.Set(found.Name)
 	Changed.Emit(found)
-	screen.Get().Repaint()
+	display.Get().Repaint()
 }

@@ -14,34 +14,24 @@ import (
 	"github.com/ygelfand/echolocal/internal/android/prop"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/lib/aec"
 	"github.com/ygelfand/echolocal/internal/lib/alsa"
 	"github.com/ygelfand/echolocal/internal/lib/audio"
-	"github.com/ygelfand/echolocal/internal/lib/denoise"
 	"github.com/ygelfand/echolocal/internal/service"
 )
 
-// The capture codec accepts one format only: 16 kHz, S24_3LE, 9 channels.
 const (
-	Rate     = 16000
-	Channels = 9
-	Bits     = 24
+	Rate = 16000
+	Bits = 24
 
-	Card          = 0
-	CaptureDevice = 24
+	Card = 0
 
 	period  = FrameSamples
 	periods = 8
 )
 
-// Mics is how many of the nine channels are microphones. ch7 and ch8 are the playback loopback.
-const Mics = 7
-
-// Refs is the loopback pair that follows them, left then right.
+// Refs is the loopback pair that follows the microphones, left then right.
 const Refs = Channels - Mics
-
-// CenterMic is the middle microphone: no arrival delay relative to the array, and usable with no
-// beamformer at all.
-const CenterMic = 6
 
 // FrameSamples is the frame size handed to listeners, 20 ms at 16 kHz.
 const FrameSamples = Rate / 50
@@ -99,10 +89,9 @@ type Source struct {
 	wasLeveling bool
 	leveling    atomic.Bool
 
-	// The same shape for the noise estimator, which also has state to throw away when it is turned off.
-	denoiser     *denoise.Stream
-	wasDenoising bool
-	denoising    atomic.Bool
+	lowCut *lowCut
+
+	suppress *aec.Preprocessor
 
 	// Which way the loudest sound is, as a beam, or -1 until something asks. finder belongs to the
 	// reader; wantFacing is how anything else asks it to look.
@@ -143,13 +132,13 @@ func New() *Source {
 		finder:     NewBeamformer(),
 		cancel:     newCanceller(),
 		cancelling: config.Get().Microphone.Cancel,
-		denoiser:   denoise.NewStream(Rate),
+		lowCut:     newLowCut(lowCutHz),
 	}
 	s.finder.hold = 1
 	s.facing.Store(-1)
 	s.adapt.Store(true)
 	s.leveling.Store(config.Get().Microphone.Leveling)
-	s.denoising.Store(config.Get().Microphone.Denoise)
+	s.suppress = newSuppressor(s.cancel)
 	return s
 }
 
@@ -244,16 +233,22 @@ func (s *Source) device() *alsa.Capture {
 }
 
 type listener struct {
-	name    string
-	ch      chan []int16
-	dropped uint64
-	told    uint64
+	name      string
+	ch        chan []int16
+	dropped   uint64
+	told      uint64
+	unleveled bool
 }
 
 // Listen returns a channel of mono frames and a function that stops the subscription. The name is
 // what a dropped frame is reported against.
-func (s *Source) Listen(name string) (<-chan []int16, func()) {
-	l := &listener{name: name, ch: make(chan []int16, 8)}
+func (s *Source) Listen(name string) (<-chan []int16, func()) { return s.listen(name, false) }
+
+// ListenUnleveled is Listen before leveling, for something that shows how loud the room is.
+func (s *Source) ListenUnleveled(name string) (<-chan []int16, func()) { return s.listen(name, true) }
+
+func (s *Source) listen(name string, unleveled bool) (<-chan []int16, func()) {
+	l := &listener{name: name, ch: make(chan []int16, 8), unleveled: unleveled}
 
 	s.mu.Lock()
 	id := s.next
@@ -406,6 +401,9 @@ func (s *Source) broadcast(raw []byte) {
 	sounding := s.sounding(raw, len(mics[CenterMic]))
 	s.leveler.atPlayback(sounding)
 
+	quiet := s.suppress != nil
+	suppressed := false
+
 	if s.cancelling && s.cancel != nil {
 		if s.reset.Swap(false) {
 			s.cancel.filter.Reset()
@@ -414,8 +412,13 @@ func (s *Source) broadcast(raw []byte) {
 
 		switch {
 		case sounding:
-			if cancelled := s.cancel.apply(s.ref, mics); cancelled != nil {
-				frame = cancelled
+			var after func([]int16)
+			if quiet {
+				s.suppress.SetEcho(s.cancel.filter)
+				after = s.suppressBlock
+			}
+			if cancelled := s.cancel.apply(s.ref, mics, after); cancelled != nil {
+				frame, suppressed = cancelled, quiet
 			}
 		default:
 			s.cancel.idle()
@@ -425,16 +428,18 @@ func (s *Source) broadcast(raw []byte) {
 	// The canceller and the mixers hand back a buffer they overwrite next frame.
 	frame = append([]int16(nil), frame...)
 
+	if quiet && !suppressed {
+		s.suppress.SetEcho(nil)
+		s.suppressBlock(frame)
+	}
+	s.lowCut.apply(frame)
+
 	s.findFacing(mics)
 
-	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the
-	// room, and before leveling, so the gain is not put back on a floor that has just been removed.
-	if quiet := s.denoising.Load(); quiet {
-		s.denoiser.Apply(frame)
-		s.wasDenoising = true
-	} else if s.wasDenoising {
-		s.denoiser.Forget()
-		s.wasDenoising = false
+	for _, l := range s.listeners {
+		if l.unleveled {
+			s.offer(l, append([]int16(nil), frame...))
+		}
 	}
 
 	// Turning leveling off throws away what it learned, so a room it has adapted badly to is
@@ -458,11 +463,8 @@ func (s *Source) broadcast(raw []byte) {
 	s.remember(frame)
 
 	for _, l := range s.listeners {
-		select {
-		case l.ch <- frame:
-		default:
-			l.dropped++
-			s.dropped.Add(1)
+		if !l.unleveled {
+			s.offer(l, frame)
 		}
 	}
 
@@ -488,6 +490,15 @@ func (s *Source) broadcast(raw []byte) {
 		case ch <- interleaved:
 		default:
 		}
+	}
+}
+
+func (s *Source) offer(l *listener, frame []int16) {
+	select {
+	case l.ch <- frame:
+	default:
+		l.dropped++
+		s.dropped.Add(1)
 	}
 }
 

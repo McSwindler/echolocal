@@ -134,3 +134,19 @@ func luminance(c Color) float64 {
 // Measured the same way everything else here is, so a color half way between does not land on one
 // answer for the text and the other for the mark beside it.
 func Dark(c Color) bool { return Contrast(paper, c) > Contrast(ink, c) }
+
+// On is the theme turned dark or light, keeping its accents.
+func (t Theme) On(dark bool) Theme {
+	if t.Dark == dark {
+		return t
+	}
+	t.Dark = dark
+	if dark {
+		t.Background, t.Text = ink, paper
+	} else {
+		t.Background, t.Text = paper, ink
+	}
+	t.Surface = t.Background.Blend(t.Text, 0.08)
+	t.Muted = t.Text.Blend(t.Background, 0.4)
+	return t
+}

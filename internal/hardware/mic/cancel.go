@@ -15,6 +15,29 @@ const cancelTaps = 1024
 // speexFrame is the speex block, which divides FrameSamples.
 const speexFrame = 64
 
+// LANovo's.
+const echoSuppressActive = -40
+
+func newSuppressor(c *canceller) *aec.Preprocessor {
+	var echo *aec.MDF
+	if c != nil {
+		echo = c.filter
+	}
+	p, err := aec.NewPreprocessor(speexFrame, Rate, echo)
+	if err != nil {
+		slog.Error("noise suppression unavailable", "err", err)
+		return nil
+	}
+	p.EchoSuppressActive = echoSuppressActive
+	return p
+}
+
+func (s *Source) suppressBlock(block []int16) {
+	if err := s.suppress.Run(block); err != nil {
+		slog.Error("noise suppression failed", "err", err)
+	}
+}
+
 // refQuiet is the mean square per sample, at int16 scale, below which the loopback counts as silence.
 // About -60 dBFS. Below it there is no echo to remove, so the filter is skipped entirely and the frame
 // costs nothing — which is what keeps this free on an idle device.
@@ -48,6 +71,8 @@ type canceller struct {
 
 	refE, micE float64
 	blocks     int
+
+	out []int16
 }
 
 func newCanceller() *canceller {
@@ -76,18 +101,30 @@ func (c *canceller) idle() {
 
 // apply returns the center microphone with the echo removed, for a frame the caller has already found
 // playback in.
-func (c *canceller) apply(ref []int16, mics [][]int16) []int16 {
+func (c *canceller) apply(ref []int16, mics [][]int16, after func(block []int16)) []int16 {
 	if !c.active.Swap(true) {
 		slog.Info("echo cancellation running", "engine", "speex", "taps", cancelTaps)
 	}
+	mic := mics[CenterMic]
 	c.refE += power(ref)
-	c.micE += power(mics[CenterMic])
+	c.micE += power(mic)
 	c.blocks++
 
-	out, err := c.filter.Process(mics[CenterMic], ref)
-	if err != nil {
-		slog.Error("echo cancellation failed", "err", err)
-		return nil
+	n := min(len(mic), len(ref))
+	if cap(c.out) < n {
+		c.out = make([]int16, n)
+	}
+	out := c.out[:n]
+	for k := 0; k+speexFrame <= n; k += speexFrame {
+		got, err := c.filter.Process(mic[k:k+speexFrame], ref[k:k+speexFrame])
+		if err != nil {
+			slog.Error("echo cancellation failed", "err", err)
+			return nil
+		}
+		copy(out[k:k+speexFrame], got)
+		if after != nil {
+			after(out[k : k+speexFrame])
+		}
 	}
 	erle := int64(c.filter.ERLE() * 1000)
 	c.erle.Store(erle)

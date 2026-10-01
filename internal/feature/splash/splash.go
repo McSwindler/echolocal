@@ -13,9 +13,8 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/feature/api"
 	"github.com/ygelfand/echolocal/internal/feature/theme"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/ui"
-	uitheme "github.com/ygelfand/echolocal/internal/ui/theme"
 )
 
 func init() {
@@ -35,9 +34,11 @@ const (
 
 	// look is how often the screen is reconsidered.
 	look = 250 * time.Millisecond
+
+	settle = 500 * time.Millisecond
 )
 
-type Splash struct{ hold *screen.Claim }
+type Splash struct{ hold *display.Claim }
 
 var (
 	once   sync.Once
@@ -50,17 +51,12 @@ func (s *Splash) Name() string { return "splash" }
 
 // Start puts the mark up, full screen, before anything else has run.
 func (s *Splash) Start(context.Context) error {
-	if screen.Get().Panel() == nil {
-		return nil
-	}
-
-	s.hold = screen.Get().Claim(screen.PriorityBoot)
-	s.hold.Show(func(p *screen.Panel) error {
+	s.hold = display.Get().Claim(display.PriorityBoot)
+	s.hold.Show(func(p *display.Panel) error {
 		t := theme.Get().Current()
-		bg := colour(t.Background)
-
-		p.Fill(bg)
-		p.Draw(ui.Mark(t.Dark), p.Bounds(), bg)
+		surface := ui.Of(p)
+		ui.Fill(surface, t.Background)
+		ui.DrawLogo(surface, box(bounds(p)), t.Background)
 		return nil
 	})
 	return nil
@@ -95,14 +91,23 @@ func (s *Splash) Run(ctx context.Context) error {
 		}
 		said = now
 
-		s.hold.Show(func(p *screen.Panel) error {
+		s.hold.Show(func(p *display.Panel) error {
 			drawBoot(p, theme.Get().Current(), progress)
 			return nil
 		})
 		slog.Info("coming up", "waiting", now)
 	}
 
-	for !component.Default().Ready() || time.Since(appeared) < listFor {
+	var done time.Time
+	for {
+		if !handOver() {
+			done = time.Time{}
+		} else if done.IsZero() {
+			done = time.Now()
+		}
+		if !done.IsZero() && time.Since(done) >= settle && time.Since(appeared) >= listFor {
+			break
+		}
 		draw()
 
 		select {
@@ -130,7 +135,7 @@ func (s *Splash) onboard(ctx context.Context) error {
 	// Setup rather than boot: the device is up, it is just not anybody's yet, so a notice or an
 	// alert belongs over the top of this.
 	s.hold.Release()
-	s.hold = screen.Get().Claim(screen.PrioritySetup)
+	s.hold = display.Get().Claim(display.PrioritySetup)
 
 	slog.Info("waiting to be added to home assistant")
 
@@ -146,7 +151,7 @@ func (s *Splash) onboard(ctx context.Context) error {
 
 		if key != said {
 			said = key
-			s.hold.Show(func(p *screen.Panel) error {
+			s.hold.Show(func(p *display.Panel) error {
 				drawOnboard(p, theme.Get().Current(), key)
 				return nil
 			})
@@ -161,6 +166,14 @@ func (s *Splash) onboard(ctx context.Context) error {
 
 	s.hold.Release()
 	return nil
+}
+
+// handOver reports whether the boot screen can let go.
+func handOver() bool {
+	if !component.Default().Ready() {
+		return false
+	}
+	return !api.Adopted() || display.Get().Covered(display.PriorityBoot)
 }
 
 // summary is what the screen currently says, for deciding whether to draw it again.
@@ -183,5 +196,3 @@ func wait(ctx context.Context, d time.Duration) bool {
 		return true
 	}
 }
-
-func colour(c uitheme.Color) screen.Color { return screen.Opaque(c.R, c.G, c.B) }

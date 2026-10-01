@@ -20,6 +20,7 @@ dist/
 
 # Embedded payload — staged by `make payload`, never committed
 internal/host/assets/payload/
+internal/parts/payload/
 
 dumps/
 captures/

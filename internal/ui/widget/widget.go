@@ -6,6 +6,7 @@ package widget
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
@@ -34,6 +35,10 @@ type Row struct {
 
 	// Hint is the smaller line under the label, for a setting whose name does not explain it.
 	Hint string
+
+	// Snap turns where the finger is into where the value can actually sit, for a slider whose
+	// range is coarser than the hundred steps a track has. Nil is a level that means itself.
+	Snap func(level int) int
 
 	// Value is what a Plain or Chevron row says on the right.
 	Value string
@@ -309,8 +314,12 @@ func (m Metrics) words(s ui.Surface, in ui.Rect, r Row, palette theme.Theme, on 
 	}
 
 	// A slider says its own level, level with the label, so the number cannot drift from the bar.
+	// Its Value instead when it has one: a rate reads as 10 fps, not as a third of the way along.
 	if r.Kind == Slider {
-		said := fmt.Sprintf("%d%%", clamp(r.Level))
+		said := r.Value
+		if said == "" {
+			said = fmt.Sprintf("%d%%", clamp(r.Level))
+		}
 		vw, _ := m.Value.Measure(said)
 		ui.DrawText(s, m.Value, in.X+in.W-vw, y, palette.Muted, on, said)
 	}
@@ -452,7 +461,7 @@ const (
 	cellLabelShare = 0.17
 )
 
-// Across is how many tiles to a line for n of them to fit the area whole. The grid does not scroll.
+// Across is how many tiles to a line for n of them to fit the area whole.
 func (m Metrics) Across(in ui.Rect, n int) int {
 	for across := 1; across < n; across++ {
 		gap := int(float64(in.W) / float64(across) * cellGap)
@@ -468,13 +477,20 @@ func (m Metrics) Across(in ui.Rect, n int) int {
 
 // Cells is where n tiles sit inside an area, in rows of across.
 func (m Metrics) Cells(in ui.Rect, n, across int) []ui.Rect {
+	return m.CellsShaped(in, n, across, 0)
+}
+
+func (m Metrics) CellsShaped(in ui.Rect, n, across int, shape float64) []ui.Rect {
 	if n <= 0 || across <= 0 {
 		return nil
+	}
+	if shape <= 0 {
+		shape = cellTall
 	}
 
 	gap := int(float64(in.W) / float64(across) * cellGap)
 	wide := (in.W - gap*(across-1)) / across
-	tall := int(float64(wide) * cellTall)
+	tall := int(float64(wide) * shape)
 
 	out := make([]ui.Rect, 0, n)
 	for i := range n {
@@ -490,7 +506,8 @@ func (m Metrics) Cells(in ui.Rect, n, across int) []ui.Rect {
 
 // DrawCell paints one tile.
 func (m Metrics) DrawCell(s ui.Surface, at ui.Rect, c Cell, palette theme.Theme) {
-	round := int(float64(at.H) * cellRound)
+	base := math.Min(float64(at.H), float64(at.W)*cellTall)
+	round := int(base * cellRound)
 
 	if c.Paint != nil {
 		c.Paint(s, at, palette)
@@ -499,14 +516,14 @@ func (m Metrics) DrawCell(s ui.Surface, at ui.Rect, c Cell, palette theme.Theme)
 	}
 
 	if c.Label != "" {
-		font := ui.MustLoad(ui.Medium, int(float64(at.H)*cellLabelShare))
+		font := ui.MustLoad(ui.Medium, int(base*cellLabelShare))
 		m.name(s, at, font, c.Label, palette)
 	}
 
 	// The ring is drawn last and outside everything, so a tile whose preview reaches its own edge
 	// cannot hide which one is chosen.
 	if c.Chosen {
-		ui.Border(s, at, max(int(float64(at.H)*cellRing), 2), palette.Accent)
+		ui.Border(s, at, max(int(base*cellRing), 2), palette.Accent)
 	}
 }
 

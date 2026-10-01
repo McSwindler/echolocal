@@ -44,8 +44,9 @@ type Firmware struct {
 	mu    sync.Mutex
 	found update.Manifest
 
-	announced  sync.Once
-	rolledBack string
+	announced     sync.Once
+	rolledBack    string
+	rebootPending bool
 }
 
 var (
@@ -138,13 +139,23 @@ func build() *Firmware {
 // reported on the next connection rather than lost.
 func (u *Firmware) announce() {
 	u.announced.Do(func() {
+		u.mu.Lock()
+		pending := u.rebootPending
+		u.mu.Unlock()
+
+		finish := "installed " + layout.Version + ", reboot to finish"
 		if config.Get().Update.LastVersion == layout.Version {
+			if pending {
+				u.status.Set(component.Fit(finish))
+			}
 			return
 		}
 
 		event, detail := EventInstalled, "installed "+layout.Version
 		if u.rolledBack != "" {
 			event, detail = EventRolledBack, "rolled back from "+u.rolledBack
+		} else if pending {
+			detail = finish
 		}
 		u.Settled(event, detail)
 
@@ -152,6 +163,13 @@ func (u *Firmware) announce() {
 			slog.Error("saving the reported version failed", "err", err)
 		}
 	})
+}
+
+// RebootPending says a part init only reads at boot changed when this process started.
+func (u *Firmware) RebootPending(pending bool) {
+	u.mu.Lock()
+	u.rebootPending = pending
+	u.mu.Unlock()
 }
 
 // Settled records how an attempt ended, for a device somebody looks at later and for an automation

@@ -72,6 +72,9 @@ type MDF struct {
 	power, power1, rf, yf, xf, eh, yh []float32
 	window, prop                      []float32
 
+	lastY, residY []float32
+	residSpec     []complex64
+
 	preemph, notchRadius float32
 	notch                [2]float32
 	memX, memD, memE     float32
@@ -108,6 +111,7 @@ func NewMDF(frame, taps, rate int) (*MDF, error) {
 		rf: make([]float32, frame+1), yf: make([]float32, frame+1), xf: make([]float32, frame+1),
 		eh: make([]float32, frame+1), yh: make([]float32, frame+1),
 		window: make([]float32, n), prop: make([]float32, m),
+		lastY: make([]float32, n), residY: make([]float32, n), residSpec: make([]complex64, frame+1),
 	}
 	switch {
 	case rate < 12000:
@@ -166,6 +170,24 @@ func (s *MDF) Reset() {
 	s.pey, s.pyy = 1, 1
 	s.davg1, s.davg2, s.dvar1, s.dvar2 = 0, 0, 0, 0
 	s.sumD, s.sumE = 0, 0
+	clear(s.lastY)
+}
+
+func (s *MDF) Frame() int { return s.frame }
+
+func (s *MDF) Residual(dst []float32) {
+	for i := range s.residY {
+		s.residY[i] = s.window[i] * s.lastY[i]
+	}
+	s.forward(s.residSpec, s.residY)
+	leak := float32(1)
+	if s.leak <= .5 {
+		leak = 2 * s.leak
+	}
+	for k := range min(len(dst), len(s.residSpec)) {
+		c := s.residSpec[k]
+		dst[k] = leak * (real(c)*real(c) + imag(c)*imag(c))
+	}
 }
 
 // SetAdapting stops or resumes learning while still cancelling with what it has.
@@ -320,6 +342,13 @@ func (s *MDF) step(in, far []int16, out []int16) {
 		}
 		out[i] = toInt16(v)
 		s.memE = v
+	}
+
+	copy(s.lastY, s.lastY[f:])
+	if s.adapted {
+		for i := range f {
+			s.lastY[f+i] = float32(in[i]) - float32(out[i])
+		}
 	}
 
 	for i := range f {

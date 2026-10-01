@@ -508,10 +508,20 @@ func (d *Device) run(ctx context.Context, args ...string) (string, error) {
 	return output(d.command(ctx, args...))
 }
 
-// Dropped reports whether adb lost the device, which it exits 255 for whatever the command was.
+// Dropped reports whether adb lost the device: exit 255 mid-command, or exit 1 with adb's own word
+// that the device is not there.
 func Dropped(err error) bool {
 	var exit *exec.ExitError
-	return errors.As(err, &exit) && exit.ExitCode() == 255
+	if !errors.As(err, &exit) {
+		return false
+	}
+	if exit.ExitCode() == 255 {
+		return true
+	}
+	msg := err.Error()
+	return exit.ExitCode() == 1 && (strings.Contains(msg, "adb: device '") && strings.Contains(msg, "' not found") ||
+		strings.Contains(msg, "device offline") ||
+		strings.Contains(msg, "no devices/emulators found"))
 }
 
 // withRetry runs a command again once if the transport went away rather than the command failing.

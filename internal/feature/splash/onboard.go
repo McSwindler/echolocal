@@ -8,7 +8,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/feature/api"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/wifi"
 	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -48,17 +48,17 @@ func networked() bool {
 //
 // Black on white whatever the theme is: a scanner expects dark modules on a light field, and a
 // device nobody has added yet is not worth losing a scan over.
-func drawOnboard(p *screen.Panel, t uitheme.Theme, key string) {
-	bg := colour(t.Background)
-	p.Fill(bg)
+func drawOnboard(p *display.Panel, t uitheme.Theme, key string) {
+	s := ui.Of(p)
+	ui.Fill(s, t.Background)
 
-	logo, list := split(p.Bounds())
-	p.Draw(ui.Mark(t.Dark), inset(logo, min(logo.Dx(), logo.Dy())/8), bg)
+	logo, list := split(bounds(p))
+	ui.DrawLogo(s, box(inset(logo, min(logo.Dx(), logo.Dy())/8)), t.Background)
 
 	short := min(list.Dx(), list.Dy())
 
 	if key == "" {
-		drawAsk(p, t, list, short)
+		drawAsk(s, t, list, short)
 		return
 	}
 
@@ -80,9 +80,9 @@ func drawOnboard(p *screen.Panel, t uitheme.Theme, key string) {
 	tall := at.Dy() + gap + height
 	top := list.Min.Y + (list.Dy()-tall)/2
 
-	p.Blit(code, image.Pt(list.Min.X+(list.Dx()-at.Dx())/2, top), bg)
+	ui.DrawImageScaled(s, code, ui.Rect{X: list.Min.X + (list.Dx()-at.Dx())/2, Y: top, W: at.Dx(), H: at.Dy()}, t.Background)
 
-	ui.DrawText(ui.Of(p), font,
+	ui.DrawText(s, font,
 		list.Min.X+(list.Dx()-width)/2, top+at.Dy()+gap, t.Text, t.Background, caption)
 }
 
@@ -90,7 +90,7 @@ func drawOnboard(p *screen.Panel, t uitheme.Theme, key string) {
 const askLines = 3
 
 // drawAsk is what a device with no network to be added over says.
-func drawAsk(p *screen.Panel, t uitheme.Theme, list image.Rectangle, short int) {
+func drawAsk(s ui.Surface, t uitheme.Theme, list image.Rectangle, short int) {
 	font := ui.MustLoad(ui.Medium, int(float64(short)*captionShare))
 	said := ui.Wrap(font, say.T("onboard.network"), list.Dx()-short/8, askLines)
 
@@ -100,7 +100,7 @@ func drawAsk(p *screen.Panel, t uitheme.Theme, list image.Rectangle, short int) 
 	y := list.Min.Y + (list.Dy()-len(said)*(height+gap)+gap)/2
 	for _, line := range said {
 		width, _ := font.Measure(line)
-		ui.DrawText(ui.Of(p), font,
+		ui.DrawText(s, font,
 			list.Min.X+(list.Dx()-width)/2, y, t.Text, t.Background, line)
 		y += height + gap
 	}

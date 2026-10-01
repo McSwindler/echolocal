@@ -14,7 +14,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/feature/mute"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/hardware/buttons"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/ui"
 )
 
@@ -29,7 +29,7 @@ type Privacy struct {
 
 	mu    sync.Mutex
 	marks Marks
-	claim *screen.Claim
+	claim *display.Claim
 }
 
 var (
@@ -137,11 +137,11 @@ func (p *Privacy) show() {
 	}
 
 	if p.claim == nil {
-		p.claim = screen.Get().Overlay(screen.PriorityAlert)
+		p.claim = display.Get().Overlay(display.PriorityAlert)
 	}
 
 	marks := p.marks
-	p.claim.Show(func(panel *screen.Panel) error {
+	p.claim.Show(func(panel *display.Panel) error {
 		Draw(ui.Of(panel), marks)
 		return nil
 	})

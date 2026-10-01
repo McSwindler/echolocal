@@ -277,6 +277,9 @@ func patchSystem(r *run) (string, bool, error) {
 // which the install has already remounted. Idempotent: AsRoot reports nothing changed once the block
 // carries a seclabel and no user or group, so a re-run writes nothing.
 func serviceAsRoot(r *run) (string, bool, error) {
+	if r.ownService() {
+		return "echod's own service runs as root", true, nil
+	}
 	name := r.board().ServiceName
 
 	changed, err := r.patchInitRC("",

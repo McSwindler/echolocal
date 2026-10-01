@@ -64,6 +64,12 @@ type Player struct {
 	// external is whatever else is driving the speaker, and nil when nothing is.
 	external atomic.Pointer[Source]
 
+	// Begun carries each source that has just started playing.
+	Begun hook.Hook[Source]
+
+	claimMu sync.Mutex
+	live    Source
+
 	// Volume carries the level whenever it moves in a way somebody should see.
 	Volume hook.Hook[int]
 

@@ -19,6 +19,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/hardware/wifi"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
 	"github.com/ygelfand/echolocal/internal/service"
 )
@@ -35,6 +36,8 @@ const Interface = "wlan0"
 
 // Client holds one lease.
 type Client struct {
+	Leased hook.Hook[*Lease]
+
 	mu    sync.Mutex
 	lease *Lease
 }
@@ -193,8 +196,12 @@ func (c *Client) Release() error { return nil }
 
 func (c *Client) set(l *Lease) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	was := c.lease
 	c.lease = l
+	c.mu.Unlock()
+	if l != was {
+		c.Leased.Emit(l)
+	}
 }
 
 // backoff is how long to leave a contested address alone. RFC 5227 section 2.1 asks for ten

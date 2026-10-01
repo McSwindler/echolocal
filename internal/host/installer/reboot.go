@@ -30,7 +30,9 @@ var rebootSteps = []step{
 // RebootAndWait restarts the device and waits for echod to come back without being told to. Not
 // Restart, which cycles echod through init while Android keeps running.
 func RebootAndWait(ctx context.Context, d *device.Device, report Reporter) error {
-	return execute(ctx, rebootSteps, &run{d: d, ctx: ctx}, report)
+	r := &run{d: d, ctx: ctx}
+	r.board()
+	return execute(ctx, rebootSteps, r, report)
 }
 
 func rebootDevice(r *run) (string, bool, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/Sendspin/sendspin-go/pkg/protocol"
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -12,6 +13,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/media"
+	"github.com/ygelfand/echolocal/internal/feature/timesync"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
 )
@@ -105,7 +107,22 @@ func build() *Player {
 			DeviceID: component.DevicePlayback,
 		},
 	}
+	timesync.Get().Synced.Listen(p.stepped)
 	return p
+}
+
+func (p *Player) stepped(s timesync.Sync) {
+	if !s.Stepped() {
+		return
+	}
+	p.mu.Lock()
+	joined := p.joined
+	p.mu.Unlock()
+	if joined == nil {
+		return
+	}
+	slog.Info("the clock was stepped, starting the sendspin session again", "by", s.After.Sub(s.Before).Round(time.Millisecond))
+	joined.client.Close()
 }
 
 // What the state sensor says, from switched off to audible.
@@ -167,6 +184,7 @@ func (p *Player) holds(s *session) {
 	p.artist.Set("")
 
 	if s == nil {
+		media.Get().Ended(p)
 		media.Get().External(nil)
 		return
 	}

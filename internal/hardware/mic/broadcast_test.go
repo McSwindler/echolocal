@@ -31,7 +31,8 @@ func quietSource() *Source {
 	s := New()
 	s.cancelling = false
 	s.leveling.Store(false)
-	s.denoising.Store(false)
+	s.suppress = nil
+	s.lowCut = nil
 	return s
 }
 

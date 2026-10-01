@@ -39,6 +39,7 @@ const (
 	VolumeDown Key = "volume_down"
 	VolumeUp   Key = "volume_up"
 	Action     Key = "action"
+	Power      Key = "power"
 )
 
 // Board is a model of device.

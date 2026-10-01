@@ -27,8 +27,7 @@ type Microphone struct {
 	// notices a chair being moved; higher waits for someone to speak.
 	Sensitivity int `json:"sensitivity"`
 
-	// Denoise estimates the steady part of the room and takes it out of what the microphones heard.
-	Denoise bool `json:"denoise"`
+	VisualizerLift int `json:"visualizerLift"`
 }
 
 const (
@@ -44,8 +43,6 @@ const (
 	DefaultLeveling = true
 
 	DefaultCancel = true
-
-	DefaultDenoise = false
 )
 
 func defaultMicrophone(d defaults.Set) Microphone {
@@ -58,8 +55,13 @@ func defaultMicrophone(d defaults.Set) Microphone {
 		Mixing:      DefaultMixing,
 		Cancel:      DefaultCancel,
 		Sensitivity: d.Sensitivity,
-		Denoise:     DefaultDenoise,
+
+		VisualizerLift: d.VisualizerLift,
 	}
+}
+
+func (w MicrophoneWriter) VisualizerLift(db int) error {
+	return w.st.Update(func(c *Config) { c.Microphone.VisualizerLift = db })
 }
 
 type MicrophoneWriter struct{ st *Store }
@@ -94,10 +96,6 @@ func (w MicrophoneWriter) Cancel(v bool) error {
 
 func (w MicrophoneWriter) Sensitivity(db int) error {
 	return w.st.Update(func(c *Config) { c.Microphone.Sensitivity = db })
-}
-
-func (w MicrophoneWriter) Denoise(v bool) error {
-	return w.st.Update(func(c *Config) { c.Microphone.Denoise = v })
 }
 
 // Mixing is how a microphone array is reduced to the single channel recognition reads.

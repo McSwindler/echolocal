@@ -34,6 +34,7 @@ import (
 	_ "github.com/ygelfand/echolocal/internal/feature/room"
 	_ "github.com/ygelfand/echolocal/internal/feature/sendspin"
 	_ "github.com/ygelfand/echolocal/internal/feature/timer"
+	_ "github.com/ygelfand/echolocal/internal/feature/timesync"
 	_ "github.com/ygelfand/echolocal/internal/feature/voice"
 	_ "github.com/ygelfand/echolocal/internal/feature/wakeword"
 	_ "github.com/ygelfand/echolocal/internal/hardware/wifi"

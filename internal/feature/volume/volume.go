@@ -13,13 +13,23 @@ import (
 	"github.com/ygelfand/echolocal/internal/feature/media"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 )
 
 func init() {
 	component.Register(component.Device, Get, component.Order(38), component.Needs(board.Panel))
 }
 
+// Change is a level that just moved.
+type Change struct {
+	Stream config.Stream
+	Level  int
+}
+
 type Volume struct {
+	// Changed carries every change, however it was made.
+	Changed hook.Hook[Change]
+
 	card    card
 	numbers map[config.Stream]*esphome.Number
 }
@@ -127,6 +137,7 @@ func (v *Volume) hold(s config.Stream, level int) {
 
 // changed says what the level is now, except over a screen already showing it.
 func (v *Volume) changed(s config.Stream) {
+	v.Changed.Emit(Change{Stream: s, Level: v.Level(s)})
 	if showing(s) {
 		shell.Get().Redraw()
 		return

@@ -1,3 +1,5 @@
+//go:build !board_checkers && !board_cronos
+
 package mic
 
 import (

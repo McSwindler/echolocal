@@ -11,6 +11,28 @@ import (
 	"github.com/ygelfand/echolocal/internal/ui/widget"
 )
 
+type feature struct {
+	label, hint func() string
+	on          func(config.Config) bool
+	set         func(bool)
+	page        func() *shell.Page
+}
+
+var features = []feature{
+	{
+		label: func() string { return say.T("features.sendspin") },
+		hint:  func() string { return say.T("features.sendspin.hint") },
+		on:    func(c config.Config) bool { return c.Sendspin.Enabled },
+		set:   func(on bool) { sendspin.Get().SetEnabled(on) },
+	},
+	{
+		label: func() string { return say.T("features.proxy") },
+		hint:  func() string { return say.T("features.proxy.hint") },
+		on:    func(c config.Config) bool { return c.Bluetooth.Proxy },
+		set:   func(on bool) { bluetooth.Get().SetProxy(on) },
+	},
+}
+
 // featuresPage is what the device does at all, as opposed to how it looks or how loud it is.
 //
 // These are whole subsystems rather than settings on one: each opens a port, holds hardware, or
@@ -23,23 +45,19 @@ func featuresPage() *shell.Page {
 		Build: func() ([]widget.Row, []func(int)) {
 			cfg := config.Get()
 
-			return []widget.Row{
-					{
-						Label: say.T("features.sendspin"),
-						Hint:  say.T("features.sendspin.hint"),
-						Kind:  widget.Toggle,
-						On:    cfg.Sendspin.Enabled,
-					},
-					{
-						Label: say.T("features.proxy"),
-						Hint:  say.T("features.proxy.hint"),
-						Kind:  widget.Toggle,
-						On:    cfg.Bluetooth.Proxy,
-					},
-				}, []func(int){
-					func(int) { sendspin.Get().SetEnabled(!cfg.Sendspin.Enabled) },
-					func(int) { bluetooth.Get().SetProxy(!cfg.Bluetooth.Proxy) },
+			rows := make([]widget.Row, 0, len(features))
+			acts := make([]func(int), 0, len(features))
+			for _, f := range features {
+				if f.page != nil {
+					rows = append(rows, widget.Row{Label: f.label(), Hint: f.hint(), Kind: widget.Chevron})
+					acts = append(acts, open(f.page()))
+					continue
 				}
+				on := f.on(cfg)
+				rows = append(rows, widget.Row{Label: f.label(), Hint: f.hint(), Kind: widget.Toggle, On: on})
+				acts = append(acts, func(int) { f.set(!on) })
+			}
+			return rows, acts
 		},
 	}
 }
@@ -49,9 +67,12 @@ func featuresOn() string {
 	var on, all int
 
 	cfg := config.Get()
-	for _, yes := range []bool{cfg.Sendspin.Enabled, cfg.Bluetooth.Proxy} {
+	for _, f := range features {
+		if f.on == nil {
+			continue
+		}
 		all++
-		if yes {
+		if f.on(cfg) {
 			on++
 		}
 	}

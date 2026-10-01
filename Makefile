@@ -79,10 +79,40 @@ BOARD_SH = go run ./cmd/echoctl board --sh $(SERIAL)
 ECHOD_DIR := /system/app/echod
 STATE_DIR := /data/misc/echolocal
 
+# The SurfaceFlinger helper for boards with a screen. Fire OS 6 is API 25.
+NDK ?= $(firstword $(ANDROID_NDK_HOME) $(ANDROID_NDK_LATEST_HOME) $(wildcard /opt/homebrew/Caskroom/android-ndk/*/AndroidNDK*.app/Contents/NDK))
+NDK_HOST := $(if $(filter Darwin,$(shell uname -s)),darwin-x86_64,linux-x86_64)
+SURFACE_API ?= 25
+NDK_CC = $(NDK)/toolchains/llvm/prebuilt/$(NDK_HOST)/bin/armv7a-linux-androideabi$(SURFACE_API)-clang
+SURFACE_SRC := native/echolocal-surface
+SURFACE_BIN := $(BUILD_DIR)/echolocal-surface-api$(SURFACE_API)
+SURFACE_STUBS := $(BUILD_DIR)/surface-stubs-api$(SURFACE_API)
+
+PARTS_DIR := internal/parts/payload
+PART_BOARDS := $(shell grep -h '^//go:build' internal/parts/*.go 2>/dev/null | \
+	grep -o 'board_[a-z0-9]*' | sed 's/^board_//' | sort -u)
+
 ##@ Development
 
 .PHONY: build
 build: build-echoctl build-echod ## Build both binaries
+
+.PHONY: build-surface
+build-surface: ## Build the SurfaceFlinger helper with the NDK (SURFACE_API=25 for Fire OS 6)
+	@test -x "$(NDK_CC)" || { echo "no NDK clang at $(NDK_CC); set NDK or ANDROID_NDK_HOME"; exit 1; }
+	@mkdir -p $(SURFACE_STUBS)
+	@for lib in gui utils binder; do \
+		up=$$(echo $$lib | tr a-z A-Z); \
+		$(NDK_CC) -shared -DLIB$$up -Wl,-soname,lib$$lib.so -o $(SURFACE_STUBS)/lib$$lib.so $(SURFACE_SRC)/stubs.c || exit 1; \
+	done
+	$(NDK_CC) -O2 -Wall -Werror -o $(SURFACE_BIN) $(SURFACE_SRC)/surface.c $(SURFACE_SRC)/video.c $(SURFACE_SRC)/gl.c $(SURFACE_SRC)/drm.c $(SURFACE_SRC)/audio.c $(SURFACE_SRC)/wire.c \
+		-L$(SURFACE_STUBS) -lgui -lutils -lbinder -landroid -lmediandk -lEGL -lGLESv2 -llog -Wl,--allow-shlib-undefined
+
+.PHONY: test-surface
+test-surface: ## Run the SurfaceFlinger helper tests that need no device, with the host compiler
+	@mkdir -p $(BUILD_DIR)
+	$(or $(HOST_CC),cc) -O1 -g -Wall -Werror -fsanitize=undefined -fno-sanitize-recover=all -I$(SURFACE_SRC) -o $(BUILD_DIR)/wire_test $(SURFACE_SRC)/wire.c $(SURFACE_SRC)/test/wire_test.c
+	$(BUILD_DIR)/wire_test
 
 .PHONY: build-echoctl
 build-echoctl: ## Build the host CLI into ./bin
@@ -90,9 +120,14 @@ build-echoctl: ## Build the host CLI into ./bin
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/echoctl ./cmd/echoctl
 
 .PHONY: build-echod
-build-echod: ## Cross-compile echod for the Echo Dot (DOT_ARCH=arm64 for a Fire OS 5 kernel; TAGS=noasm for the portable dot)
+build-echod: $(if $(filter $(BOARD),$(PART_BOARDS)),stage-parts) ## Cross-compile echod for the Echo Dot (DOT_ARCH=arm64 for a Fire OS 5 kernel; TAGS=noasm for the portable dot)
 	@mkdir -p $(BUILD_DIR)
 	$(DEVICE_ENV) go build $(DEVICE_TAGS) -ldflags "$(DEVICE_LDFLAGS)" -o $(DEVICE_BIN) ./cmd/echod
+
+.PHONY: stage-parts
+stage-parts: build-surface ## Stage the native parts echod embeds for the boards that carry them
+	@mkdir -p $(PARTS_DIR)
+	cp $(SURFACE_BIN) $(PARTS_DIR)/echolocal-surface
 
 .PHONY: build-echod-all
 build-echod-all: ## Build every binary a release publishes, from a clean bin
@@ -194,18 +229,14 @@ install-echod: ## Install echod into /system/app/echod, built for whatever board
 			[ \"$$binary\" = $(ECHOD_DIR)/echod ] || [ -L \"$$binary\" ] && setprop ctl.start $$service; \
 			ls -lZ $(ECHOD_DIR)/echod"
 
-.PHONY: install-service
-install-service: install-echod ## Take over the board's service so init starts echod
-	@eval "$$($(BOARD_SH))"; svc=/system/bin/$$service; \
-		$(ADB) remount >/dev/null; \
-		$(ADB) shell "[ -e $$svc.orig ] || mv $$svc $$svc.orig; \
-			rm -f $$svc; ln -s $(ECHOD_DIR)/echod $$svc; ls -lZ $$svc $$svc.orig"
-
-.PHONY: uninstall-service
-uninstall-service: ## Restore Amazon's binary for the board's service
-	@eval "$$($(BOARD_SH))"; svc=/system/bin/$$service; \
-		$(ADB) remount >/dev/null; \
-		$(ADB) shell "rm -f $$svc; mv $$svc.orig $$svc; chcon $$label $$svc; ls -lZ $$svc"
+.PHONY: thumbs
+thumbs: ## Render the visual picker's thumbnails on the attached screen into what the binary embeds
+	@$(MAKE) --no-print-directory device
+	$(ADB) shell rm -rf $(DEVICE_TMP)/echolocal-thumbs
+	$(ADB) shell $(ECHOD_DIR)/echod ctl screen thumbs $(DEVICE_TMP)/echolocal-thumbs
+	rm -f $(CURDIR)/internal/ui/visual/thumbs/*.jpg
+	$(ADB) pull $(DEVICE_TMP)/echolocal-thumbs/. $(CURDIR)/internal/ui/visual/thumbs/
+	$(ADB) shell rm -rf $(DEVICE_TMP)/echolocal-thumbs
 
 .PHONY: restart-echod
 restart-echod: ## Restart echod through init (ctl.stop then ctl.start)

@@ -35,7 +35,11 @@ const (
 	VolumeDown = board.VolumeDown
 	VolumeUp   = board.VolumeUp
 	Action     = board.Action
+	Power      = board.Power
 )
+
+// cronos's driver sends KEY_POWER down and up 40µs apart about a second after each cut; real presses measured 90-230ms.
+const instant = time.Millisecond
 
 // codes is what a board that says nothing reports.
 var codes = map[uint16]Name{
@@ -104,6 +108,8 @@ type Controller struct {
 	devices []*input.Device
 	shutter bool
 	covered bool
+
+	cut, cutKnown bool
 }
 
 var (
@@ -140,6 +146,7 @@ func (c *Controller) Start(context.Context) error {
 	if shutter {
 		c.findShutter(devices)
 	}
+	c.findMute(devices)
 
 	slog.Debug("buttons ready", "devices", len(devices))
 	return nil
@@ -160,6 +167,35 @@ func (c *Controller) findShutter(devices []*input.Device) {
 		return
 	}
 	slog.Warn("no camera cover on a board that should have one")
+}
+
+// findMute reads where the microphone cut is now, on a board whose driver reports it as a switch.
+func (c *Controller) findMute(devices []*input.Device) {
+	for _, d := range devices {
+		if !d.HasSwitch(input.SwMuteDevice) {
+			continue
+		}
+		cut, err := d.Switch(input.SwMuteDevice)
+		if err != nil {
+			slog.Warn("reading the microphone cut", "device", d.Path, "err", err)
+			return
+		}
+		c.setCut(cut)
+		return
+	}
+}
+
+func (c *Controller) setCut(cut bool) {
+	c.mu.Lock()
+	c.cut, c.cutKnown = cut, true
+	c.mu.Unlock()
+}
+
+// MuteSwitch is the microphone cut as the input switch last reported it; known is false without one.
+func (c *Controller) MuteSwitch() (cut, known bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cut, c.cutKnown
 }
 
 // setCovered records the cover's position and tells anyone listening, if it moved.
@@ -222,6 +258,7 @@ func (c *Controller) Run(ctx context.Context) error {
 // held tracks one button between its press and its release. This keypad emits no autorepeat, only
 // press and release, so holding is timed here rather than counted from repeat events.
 type held struct {
+	at     time.Duration
 	mu     sync.Mutex
 	long   bool
 	timer  *time.Timer
@@ -272,6 +309,9 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 			if c.shutter && e.Code == input.SwCameraLensCover {
 				c.setCovered(!open(e.Value))
 			}
+			if e.Code == input.SwMuteDevice {
+				c.setCut(e.Value != 0)
+			}
 		}
 	}
 }
@@ -287,13 +327,18 @@ func (c *Controller) key(e input.Event, down map[uint16]*held) {
 
 	switch e.Value {
 	case 1:
-		down[e.Code] = c.pressed(name)
+		h := c.pressed(name)
+		h.at = e.At()
+		down[e.Code] = h
 	case 0:
 		h, ok := down[e.Code]
 		if !ok {
 			return
 		}
 		delete(down, e.Code)
+		if name == Mute && e.At()-h.at < instant {
+			name = Power
+		}
 		c.released(name, h)
 	}
 }

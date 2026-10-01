@@ -70,11 +70,17 @@ func TestReplayPipeline(t *testing.T) {
 		s := New()
 		s.mixer = Center{}
 		s.cancelling = v.cancel
-		s.denoising.Store(v.denoise)
 		s.leveling.Store(!v.raw)
 		if v.filter != nil {
 			s.cancel = &canceller{filter: v.filter()}
 		}
+		suppressor := func() *aec.Preprocessor {
+			if !v.denoise {
+				return nil
+			}
+			return newSuppressor(s.cancel)
+		}
+		s.suppress = suppressor()
 
 		frames, stop := s.Listen("replay")
 		var got []byte
@@ -84,7 +90,7 @@ func TestReplayPipeline(t *testing.T) {
 			}
 			if pass == 1 {
 				s.leveler = newLeveler()
-				s.denoiser.Forget()
+				s.suppress = suppressor()
 				s.Freeze(v.frozen)
 			}
 			for at := 0; at+FrameSamples <= n; at += FrameSamples {

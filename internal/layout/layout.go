@@ -13,9 +13,20 @@ import (
 const (
 	Dir      = "/system/app/echod"
 	Binary   = Dir + "/echod"
+	Surface  = Dir + "/echolocal-surface"
 	StateDir = "/data/misc/echolocal"
 	KeyPath  = StateDir + "/psk"
 	NamePath = StateDir + "/name"
+
+	CastCredentialsPath = StateDir + "/cast-credentials.json"
+	CastAuthorityPath   = StateDir + "/cast-authority.json"
+
+	// Service is echod's own init service, on a board that has one rather than taking over Amazon's.
+	FBDevice = "/dev/graphics/fb0"
+
+	Service        = "echod"
+	SurfaceService = "echolocal_sf"
+	InitRC         = "/system/etc/init/echolocal.rc"
 
 	// PrevBinary is the binary an update replaced, kept until the new one has proved itself. Its
 	// presence at boot is what says a trial never finished, so nothing may leave one lying around.

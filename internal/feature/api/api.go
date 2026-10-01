@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -84,8 +85,9 @@ func (a *API) Start(context.Context) error {
 	}
 
 	device := config.Get().Device
+	registered := component.Default().Entities()
 	ents := esphome.NewEntities()
-	if err := ents.Add(component.Default().Entities()...); err != nil {
+	if err := ents.Add(registered...); err != nil {
 		return err
 	}
 	if err := ents.AddActions(component.Default().Actions()...); err != nil {
@@ -106,7 +108,7 @@ func (a *API) Start(context.Context) error {
 			VoiceFeatures:     voice.Features,
 			BluetoothFeatures: bluetooth.Get().Features(),
 
-			Devices: subDevices(device.Name),
+			Devices: subDevices(device.Name, registered),
 		},
 		PSK:    psk,
 		Logger: slog.Default(),
@@ -130,20 +132,49 @@ func (a *API) Start(context.Context) error {
 //
 // Each name carries the device's own, because Home Assistant shows what it is given verbatim: a bare "Ring"
 // or "Assistant 1" is unreadable in a house with several satellites.
-func subDevices(name string) []esphome.Device {
-	out := []esphome.Device{
+//
+// Only a sub-device some entity names is announced.
+func subDevices(name string, ents []esphome.Entity) []esphome.Device {
+	all := []esphome.Device{
 		{ID: component.DeviceRing, Name: name + " ring"},
 		{ID: component.DeviceMicrophone, Name: name + " microphone"},
 		{ID: component.DevicePlayback, Name: name + " playback"},
+		{ID: component.DeviceScreen, Name: name + " screen"},
 	}
-
 	for slot := range wakeword.Slots {
-		out = append(out, esphome.Device{
+		all = append(all, esphome.Device{
 			ID:   component.AssistantDevice(slot),
 			Name: fmt.Sprintf("%s assistant %d", name, slot+1),
 		})
 	}
+
+	used := map[uint32]bool{}
+	for _, e := range ents {
+		used[deviceOf(e)] = true
+	}
+
+	var out []esphome.Device
+	for _, d := range all {
+		if used[d.ID] {
+			out = append(out, d)
+		}
+	}
 	return out
+}
+
+// deviceOf is the sub-device an entity names, read from the DeviceID its Base carries.
+func deviceOf(e esphome.Entity) uint32 {
+	v := reflect.ValueOf(e)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return 0
+	}
+	if f := v.FieldByName("DeviceID"); f.IsValid() && f.Kind() == reflect.Uint32 {
+		return uint32(f.Uint())
+	}
+	return 0
 }
 
 // Run listens until ctx is cancelled, advertising over mDNS so Home Assistant finds the device

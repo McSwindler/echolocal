@@ -38,6 +38,73 @@ func (i *Image) At(x, y int) theme.Color {
 	return i.px[y*i.w+x]
 }
 
+// RGBADrawer is a surface that takes a whole RGBA image at once, each pixel scale times across and
+// down, painting only inside clip.
+type RGBADrawer interface {
+	DrawRGBA(x, y int, img *image.RGBA, scale int, clip Rect)
+}
+
+// DrawRGBA paints img onto s through its RGBADrawer when it has one, and a pixel at a time when
+// it does not.
+func DrawRGBA(s Surface, x, y int, img *image.RGBA, scale int, clip Rect) {
+	if d, ok := s.(RGBADrawer); ok {
+		d.DrawRGBA(x, y, img, scale, clip)
+		return
+	}
+	scale = max(scale, 1)
+	b := img.Bounds()
+	w, h := s.Size()
+	x0, y0 := max(x, 0), max(y, 0)
+	x1, y1 := min(x+b.Dx()*scale, w), min(y+b.Dy()*scale, h)
+	if clip.W > 0 && clip.H > 0 {
+		x0, y0 = max(x0, clip.X), max(y0, clip.Y)
+		x1, y1 = min(x1, clip.X+clip.W), min(y1, clip.Y+clip.H)
+	}
+	for py := y0; py < y1; py++ {
+		src := img.Pix[((py-y)/scale)*img.Stride:]
+		for px := x0; px < x1; px++ {
+			i := ((px - x) / scale) * 4
+			s.Set(px, py, theme.Color{R: src[i], G: src[i+1], B: src[i+2]})
+		}
+	}
+}
+
+func (i *Image) DrawRGBA(x, y int, img *image.RGBA, scale int, clip Rect) {
+	scale = max(scale, 1)
+	b := img.Bounds()
+	x0, y0 := max(x, 0), max(y, 0)
+	x1, y1 := min(x+b.Dx()*scale, i.w), min(y+b.Dy()*scale, i.h)
+	if clip.W > 0 && clip.H > 0 {
+		x0, y0 = max(x0, clip.X), max(y0, clip.Y)
+		x1, y1 = min(x1, clip.X+clip.W), min(y1, clip.Y+clip.H)
+	}
+	if x1 <= x0 || y1 <= y0 {
+		return
+	}
+	sx0, phase0 := (x0-x)/scale, (x0-x)%scale
+	sy, phy := (y0-y)/scale, (y0-y)%scale
+	built := -1
+	for py := y0; py < y1; py++ {
+		dst := i.px[py*i.w+x0 : py*i.w+x1]
+		if sy == built {
+			copy(dst, i.px[(py-1)*i.w+x0:(py-1)*i.w+x1])
+		} else {
+			src := img.Pix[sy*img.Stride:]
+			s, ph := sx0*4, phase0
+			for k := range dst {
+				dst[k] = theme.Color{R: src[s], G: src[s+1], B: src[s+2]}
+				if ph++; ph == scale {
+					ph, s = 0, s+4
+				}
+			}
+			built = sy
+		}
+		if phy++; phy == scale {
+			phy, sy = 0, sy+1
+		}
+	}
+}
+
 // Draw copies an image onto a surface with its top-left corner at x, y.
 //
 // What lands outside is worked out once rather than per pixel: a full screen is two million of

@@ -29,6 +29,9 @@ var (
 	writable = remount
 )
 
+// Writable makes the filesystem holding echod writable, or read-only again.
+func Writable(rw bool) error { return writable(rw) }
+
 // mountHolding is what has to be made writable to replace a binary at this path. Which filesystem
 // that is depends on the firmware: Fire OS 5 mounts the system partition at /system, Fire OS 6 runs
 // it as the root filesystem, and devices in the field are on both.

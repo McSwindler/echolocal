@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/ygelfand/echolocal/internal/ui/theme"
+import (
+	"image"
+
+	"github.com/ygelfand/echolocal/internal/ui/theme"
+)
 
 // Within is a surface that only takes paint inside a rectangle.
 //
@@ -25,6 +29,56 @@ func (w within) Set(x, y int, c theme.Color) {
 		return
 	}
 	w.under.Set(x, y, c)
+}
+
+func (w within) Over(x, y int, c theme.Color, a byte) {
+	if w.to.Contains(x, y) {
+		Over(w.under, x, y, c, a)
+	}
+}
+
+func (w within) clip(r Rect) (Rect, bool) {
+	x0, y0 := max(r.X, w.to.X), max(r.Y, w.to.Y)
+	x1, y1 := min(r.X+r.W, w.to.X+w.to.W), min(r.Y+r.H, w.to.Y+w.to.H)
+	if x1 <= x0 || y1 <= y0 {
+		return Rect{}, false
+	}
+	return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, true
+}
+
+func (w within) FillRect(r Rect, c theme.Color) {
+	if r, ok := w.clip(r); ok {
+		FillRect(w.under, r, c)
+	}
+}
+
+func (w within) ClearRect(r Rect) {
+	if r, ok := w.clip(r); ok {
+		Clear(w.under, r)
+	}
+}
+
+func (w within) Shade(r Rect, top, bottom byte) {
+	c, ok := w.clip(r)
+	if !ok {
+		return
+	}
+	span := max(r.H-1, 1)
+	at := func(y int) byte { return byte(int(top) + (int(bottom)-int(top))*(y-r.Y)/span) }
+	Shade(w.under, c, at(c.Y), at(c.Y+c.H-1))
+}
+
+func (w within) DrawRGBA(x, y int, img *image.RGBA, scale int, clip Rect) {
+	to := w.to
+	if clip.W > 0 && clip.H > 0 {
+		x0, y0 := max(to.X, clip.X), max(to.Y, clip.Y)
+		x1, y1 := min(to.X+to.W, clip.X+clip.W), min(to.Y+to.H, clip.Y+clip.H)
+		if x1 <= x0 || y1 <= y0 {
+			return
+		}
+		to = Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+	}
+	DrawRGBA(w.under, x, y, img, scale, to)
 }
 
 func (w within) At(x, y int) theme.Color {

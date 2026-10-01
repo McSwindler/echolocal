@@ -18,6 +18,52 @@ type Surface interface {
 	Size() (w, h int)
 }
 
+type Clearer interface {
+	ClearRect(r Rect)
+}
+
+// Clear makes r transparent on a surface that can be, and black on one that cannot.
+func Clear(s Surface, r Rect) {
+	if c, ok := s.(Clearer); ok {
+		c.ClearRect(r)
+		return
+	}
+	FillRect(s, r, theme.Color{})
+}
+
+type Compositor interface {
+	Over(x, y int, c theme.Color, a byte)
+}
+
+func Over(s Surface, x, y int, c theme.Color, a byte) {
+	if o, ok := s.(Compositor); ok {
+		o.Over(x, y, c, a)
+		return
+	}
+	if r, ok := s.(Reader); ok && a != 255 {
+		d := r.At(x, y)
+		keep := 255 - int(a)
+		c.R = byte(min(int(c.R)+(int(d.R)*keep+127)/255, 255))
+		c.G = byte(min(int(c.G)+(int(d.G)*keep+127)/255, 255))
+		c.B = byte(min(int(c.B)+(int(d.B)*keep+127)/255, 255))
+	}
+	s.Set(x, y, c)
+}
+
+type Shader interface {
+	Shade(r Rect, top, bottom byte)
+}
+
+// Shade darkens r from one opacity at its top to another at its bottom where the surface can
+// show what is under it, and fills it black where it cannot.
+func Shade(s Surface, r Rect, top, bottom byte) {
+	if sh, ok := s.(Shader); ok {
+		sh.Shade(r, top, bottom)
+		return
+	}
+	FillRect(s, r, theme.Color{})
+}
+
 // Reader is a surface whose pixels can be read back. Antialiasing needs it: the edge of a curve
 // is a blend with whatever is already there, and what is already there is often not the page
 // background — the filled part of a slider is drawn over the track's own rounded end.

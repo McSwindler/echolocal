@@ -7,14 +7,13 @@
 package shell
 
 import (
-	"image"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/component"
 	apptheme "github.com/ygelfand/echolocal/internal/feature/theme"
-	"github.com/ygelfand/echolocal/internal/hardware/screen"
+	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/touch"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
@@ -101,6 +100,10 @@ type Presser interface {
 	Press(x, y int, down bool) bool
 }
 
+type Scroller interface {
+	Scroll(by int) bool
+}
+
 // Dragger is a view with something to pull, such as a slider.
 type Dragger interface {
 	// Grab takes a finger going down and reports whether it landed on something draggable.
@@ -109,6 +112,10 @@ type Dragger interface {
 	// Drag is that finger moving. Returning false means nothing changed, which is most moves: a
 	// slider has a hundred steps and a track is a thousand pixels wide.
 	Drag(x, y int) bool
+}
+
+type Releaser interface {
+	Let(x, y int) bool
 }
 
 // Shell is the stack.
@@ -121,7 +128,7 @@ type Shell struct {
 	// idle puts away the rest and leaves these.
 	holds map[View]bool
 
-	claim *screen.Claim
+	claim *display.Claim
 
 	// covering is what the held claim was taken as, so a view that covers replaces one that does
 	// not rather than being drawn into a claim that lets the dashboard through.
@@ -129,7 +136,7 @@ type Shell struct {
 
 	// at is the priority the held claim was taken at, which follows the top view: an urgent one
 	// outranks a notice, and an ordinary one does not.
-	at screen.Priority
+	at display.Priority
 
 	// closed is when the last screen went away, so the gesture that did it is not read twice.
 	closed time.Time
@@ -140,7 +147,10 @@ type Shell struct {
 	// held is what a finger is currently dragging, and where it went down.
 	held                  Dragger
 	downX, downY          int
+	edged                 bool
 	moved, swept, dragged bool
+	scrolling             bool
+	lastY                 int
 }
 
 var (
@@ -186,9 +196,54 @@ func (s *Shell) Top() View {
 	return s.stack[len(s.stack)-1]
 }
 
+func (s *Shell) Visible(v View) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Contains(showing(s.stack), v)
+}
+
+type Stacked struct {
+	View View
+	Held bool
+}
+
+func (s *Shell) Stack() []Stacked {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]Stacked, len(s.stack))
+	for i, v := range s.stack {
+		out[i] = Stacked{View: v, Held: s.holds[v]}
+	}
+	return out
+}
+
+type Sleeper interface{ Asleep() bool }
+
+type Waker interface{ Wakes() bool }
+
+func (s *Shell) refuses(v View) bool {
+	n := len(s.stack)
+	if n == 0 || s.stack[n-1] == v {
+		return false
+	}
+	if sl, ok := s.stack[n-1].(Sleeper); !ok || !sl.Asleep() {
+		return false
+	}
+	if !v.Covers() {
+		return false
+	}
+	w, ok := v.(Waker)
+	return !ok || !w.Wakes()
+}
+
 // Push puts a view on top, sliding it in from the side.
 func (s *Shell) Push(v View) {
 	s.mu.Lock()
+	if s.refuses(v) {
+		s.mu.Unlock()
+		return
+	}
 	var under View
 	if n := len(s.stack); n > 0 {
 		under = s.stack[n-1]
@@ -208,6 +263,10 @@ func (s *Shell) Push(v View) {
 // wherever it has ended up in the stack.
 func (s *Shell) Hold(v View) *Hold {
 	s.mu.Lock()
+	if s.refuses(v) {
+		s.mu.Unlock()
+		return nil
+	}
 	if s.holds == nil {
 		s.holds = map[View]bool{}
 	}
@@ -375,9 +434,9 @@ func (s *Shell) redraw(damage ui.Rect) {
 			s.claim.Release()
 		}
 		if covers {
-			s.claim = screen.Get().Claim(at)
+			s.claim = display.Get().Claim(at)
 		} else {
-			s.claim = screen.Get().Overlay(at)
+			s.claim = display.Get().Overlay(at)
 		}
 		s.covering, s.at = covers, at
 	}
@@ -385,7 +444,7 @@ func (s *Shell) redraw(damage ui.Rect) {
 	s.mu.Unlock()
 
 	palette := apptheme.Get().Current()
-	paint := func(p *screen.Panel) error {
+	paint := func(p *display.Panel) error {
 		// Where the slide has got to is read here rather than when the frame was asked for: the
 		// render loop runs behind, and a page placed by an old reading would jump backwards.
 		if moving != nil {
@@ -401,7 +460,7 @@ func (s *Shell) redraw(damage ui.Rect) {
 	// Not while a page is sliding: the whole screen is moving, so a rectangle one view worked out
 	// for itself describes none of it.
 	if damage.W > 0 && damage.H > 0 && moving == nil {
-		claim.ShowIn(image.Rect(damage.X, damage.Y, damage.X+damage.W, damage.Y+damage.H), paint)
+		claim.ShowIn(display.Rect{X: damage.X, Y: damage.Y, W: damage.W, H: damage.H}, paint)
 		return
 	}
 	claim.Show(paint)
@@ -429,11 +488,11 @@ func showing(stack []View) []View {
 // Anywhere rather than on top, because the shell holds one claim for the whole stack. A volume
 // notice over a ringing alarm is still an alarm on the screen, and dropping to PriorityUI for it
 // would put both under whatever else is showing.
-func rank(draw []View) screen.Priority {
+func rank(draw []View) display.Priority {
 	if slices.ContainsFunc(draw, urgent) {
-		return screen.PriorityAlert
+		return display.PriorityAlert
 	}
-	return screen.PriorityUI
+	return display.PriorityUI
 }
 
 // idled puts away what a person opened and leaves what something is holding, so a player stays up
@@ -522,9 +581,11 @@ func (s *Shell) down(top View, c touch.Contact) {
 		held = d
 	}
 
+	edged := atBackEdge(c.X)
 	s.mu.Lock()
-	s.held, s.downX, s.downY = held, c.X, c.Y
+	s.held, s.downX, s.downY, s.edged = held, c.X, c.Y, edged
 	s.moved, s.swept, s.dragged = false, false, false
+	s.scrolling, s.lastY = false, c.Y
 	s.mu.Unlock()
 
 	// Nothing draggable took it, so it may yet be a tap and is worth showing as one.
@@ -550,14 +611,23 @@ func (s *Shell) move(top View, c touch.Contact) {
 		s.moved = true
 	}
 
+	sc, scrollable := top.(Scroller)
+	if scrollable && !s.scrolling && !s.swept && !s.dragged && far && dy > dx {
+		s.scrolling, s.held, held = true, nil, nil
+	}
+
 	// Across, not just far: a screen is put away sideways, the way the chevron at its top left says.
-	if dx > sweep && dx > dy {
+	if !s.scrolling && s.edged && dx > sweep && dx > dy {
 		s.swept = true
 	}
 
 	drag := held != nil && s.moved
 	if drag {
 		s.dragged = true
+	}
+	by := 0
+	if s.scrolling {
+		by, s.lastY = s.lastY-c.Y, c.Y
 	}
 	s.mu.Unlock()
 
@@ -569,17 +639,22 @@ func (s *Shell) move(top View, c touch.Contact) {
 	if drag && held.Drag(c.X, c.Y) {
 		s.repaint(held)
 	}
+	if by != 0 && sc.Scroll(by) {
+		s.repaint(top)
+	}
 }
 
 func (s *Shell) up(top View, c touch.Contact) {
 	s.mu.Lock()
-	held, moved, swept, dragged := s.held, s.moved, s.swept, s.dragged
-	s.held = nil
+	held, moved, swept, dragged, scrolling := s.held, s.moved, s.swept, s.dragged, s.scrolling
+	s.held, s.scrolling = nil, false
 	s.mu.Unlock()
 
 	s.unpress(top)
 
 	switch {
+	case scrolling:
+
 	case dragged:
 		// The pull is already applied; letting go is not also a tap.
 
@@ -607,7 +682,24 @@ func (s *Shell) up(top View, c touch.Contact) {
 	default:
 		s.Redraw()
 	}
+
+	if r, ok := held.(Releaser); ok && !scrolling && r.Let(c.X, c.Y) {
+		s.repaint(held)
+	}
 }
+
+func atBackEdge(x int) bool {
+	w := panelWidth()
+	return x >= w-w/edgeShare
+}
+
+// panelWidth is how wide the picture is viewed.
+var panelWidth = func() int {
+	w, _ := display.Get().Size()
+	return w
+}
+
+const edgeShare = 8
 
 func abs(v int) int {
 	if v < 0 {
@@ -640,5 +732,5 @@ func (s *Shell) repaint(v any) {
 		return
 	}
 
-	claim.Refresh(image.Rect(damage.X, damage.Y, damage.X+damage.W, damage.Y+damage.H))
+	claim.Refresh(display.Rect{X: damage.X, Y: damage.Y, W: damage.W, H: damage.H})
 }

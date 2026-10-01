@@ -24,8 +24,14 @@ type Page struct {
 
 	// Tiles is the grid form, for a page with more choices than a screen of rows holds. A page has
 	// one or the other, and Across is how many tiles to a line.
-	Tiles  func() ([]widget.Cell, []func(int))
-	Across int
+	Tiles     func() ([]widget.Cell, []func(int))
+	Across    int
+	AcrossFor func(w, h int) int
+	Screened  bool
+
+	Action   ui.Icon
+	OnAction func()
+	actionAt ui.Rect
 
 	// Aside draws beside the rows, along the bottom or down the left as the screen is shaped.
 	Aside func(s ui.Surface, at ui.Rect, palette theme.Theme, m widget.Metrics)
@@ -46,6 +52,11 @@ type Page struct {
 	// row it is over on every move hands it whichever one it drifted into.
 	held    int
 	holding bool
+
+	scroll, overflow int
+	body             ui.Rect
+	visible          []ui.Rect
+	scrolled         bool
 }
 
 func (p *Page) Covers() bool { return true }
@@ -57,7 +68,17 @@ func (p *Page) Draw(s ui.Surface, palette theme.Theme) {
 	w, h := s.Size()
 	p.metrics = widget.New(w, h)
 
-	page := widget.Page{Title: p.Title, Pressed: p.Pressed, Across: p.Across, Aside: p.Aside}
+	page := widget.Page{Title: p.Title, Pressed: p.Pressed, Across: p.Across, Aside: p.Aside, Action: p.Action, Scroll: p.scroll}
+	p.actionAt = ui.Rect{}
+	if p.Action != nil {
+		p.actionAt = p.metrics.Action(ui.Rect{W: w, H: h})
+	}
+	if p.AcrossFor != nil {
+		page.Across = p.AcrossFor(w, h)
+	}
+	if p.Screened && w > 0 {
+		page.Tall = float64(h) / float64(w)
+	}
 	if p.Tiles != nil {
 		p.rows, page.Cells, p.acts = nil, nil, nil
 		page.Cells, p.acts = p.Tiles()
@@ -66,9 +87,33 @@ func (p *Page) Draw(s ui.Surface, palette theme.Theme) {
 		page.Rows = p.rows
 	}
 
-	p.places = p.metrics.DrawPage(s, page, palette)
+	d := p.metrics.DrawScrolled(s, page, palette)
+	p.places, p.body, p.overflow = d.Places, d.Body, d.Overflow
+	p.scroll = min(max(p.scroll, 0), p.overflow)
+	p.visible = make([]ui.Rect, len(p.places))
+	for i, at := range p.places {
+		p.visible[i] = clipTo(at, p.body)
+	}
 
-	p.Places(p.places)
+	p.Places(p.visible)
+}
+
+func (p *Page) Scroll(by int) bool {
+	to := min(max(p.scroll+by, 0), p.overflow)
+	if to == p.scroll {
+		return false
+	}
+	p.scroll, p.scrolled = to, true
+	return true
+}
+
+func clipTo(a, b ui.Rect) ui.Rect {
+	x0, y0 := max(a.X, b.X), max(a.Y, b.Y)
+	x1, y1 := min(a.X+a.W, b.X+b.W), min(a.Y+a.H, b.Y+b.H)
+	if x1 <= x0 || y1 <= y0 {
+		return ui.Rect{}
+	}
+	return ui.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
 }
 
 // Tap runs what the touched row does. A touch in the band above the rows goes back, so the way out
@@ -78,6 +123,10 @@ func (p *Page) Draw(s ui.Surface, palette theme.Theme) {
 // dashboard, which Pop does by closing.
 func (p *Page) Tap(x, y int) bool {
 	if p.AsideTap != nil && p.AsideTap(x, y) {
+		return true
+	}
+	if p.OnAction != nil && p.actionAt.Inset(-p.actionAt.W/4).Contains(x, y) {
+		p.OnAction()
 		return true
 	}
 	if at, ok := p.hit(x, y); ok {
@@ -116,6 +165,12 @@ func (p *Page) Drag(x, _ int) bool {
 	}
 
 	want := p.metrics.Level(p.places[at], x)
+
+	// Where the value can sit, not where the finger is. A rate of 1 to 30 has thirty places along
+	// a hundred step track, and a bar drawn between two of them is showing a number nothing holds.
+	if snap := p.rows[at].Snap; snap != nil {
+		want = snap(want)
+	}
 	if want == p.rows[at].Level {
 		return false
 	}
@@ -152,8 +207,8 @@ func (p *Page) level(at int) int {
 }
 
 func (p *Page) hit(x, y int) (int, bool) {
-	for i, at := range p.places {
-		if at.Contains(x, y) {
+	for i, at := range p.visible {
+		if at.W > 0 && at.Contains(x, y) {
 			return i, true
 		}
 	}
@@ -161,13 +216,18 @@ func (p *Page) hit(x, y int) (int, bool) {
 }
 
 func (p *Page) header(y int) bool {
-	return len(p.places) > 0 && y < p.places[0].Y
+	return len(p.places) > 0 && y < p.body.Y
 }
 
 // Damaged is the row a drag is moving, which is all a slider step changes.
 func (p *Page) Damaged() ui.Rect {
-	if !p.holding || p.held >= len(p.places) {
+	if p.scrolled {
+		p.scrolled = false
+		bar := p.metrics.ScrollBar(widget.Drawn{Body: p.body, Scroll: p.scroll, Overflow: p.overflow})
+		return ui.Rect{X: p.body.X, Y: p.body.Y, W: bar.X + bar.W - p.body.X, H: p.body.H}
+	}
+	if !p.holding || p.held >= len(p.visible) {
 		return ui.Rect{}
 	}
-	return p.places[p.held]
+	return p.visible[p.held]
 }

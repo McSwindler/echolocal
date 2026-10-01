@@ -1,0 +1,24 @@
+service echod /system/app/echod/echod run
+    class core
+    user root
+    group root
+    seclabel u:r:su:s0
+
+service echolocal_sf /system/app/echod/echolocal-surface
+    class core
+    user root
+    group root graphics system
+    seclabel u:r:su:s0
+    socket echolocal-surface stream 0666 root root
+
+on post-fs
+    setprop debug.sf.nobootanimation 1
+
+on property:init.svc.bootanim=running
+    stop bootanim
+
+on zygote-start
+    stop zygote
+
+on property:init.svc.zygote=running
+    stop zygote

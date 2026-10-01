@@ -21,9 +21,6 @@ const (
 	pgaMax    = 119
 )
 
-// adcs are the four converters the seven microphones arrive on.
-var adcs = []string{"A", "B", "C", "D"}
-
 // routeInputs points every ADC at the differential input its microphones are wired to.
 func routeInputs() {
 	m, err := alsa.OpenMixer(Card)

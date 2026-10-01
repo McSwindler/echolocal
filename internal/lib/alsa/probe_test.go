@@ -1,6 +1,7 @@
 package alsa
 
 import (
+	"math"
 	"os"
 	"testing"
 )
@@ -9,6 +10,54 @@ import (
 // the structure layouts match the kernel's: a wrong size is rejected outright, and a wrong stride
 // reads a neighbouring value's high half. Reading is enough, and the control device tolerates
 // several openers, so this runs safely alongside echod. Set ALSA_PROBE=1 on the device.
+func TestProbeDevices(t *testing.T) {
+	if os.Getenv("ALSA_PROBE") == "" {
+		t.Skip("set ALSA_PROBE=1 on a device with a sound card")
+	}
+	for _, d := range []struct {
+		device  int
+		capture bool
+	}{{22, true}, {23, false}, {8, true}, {24, true}} {
+		r, err := Refine(0, d.device, d.capture)
+		t.Logf("device %d capture=%v: %v %v", d.device, d.capture, r, err)
+	}
+}
+
+func TestProbeQuietChannels(t *testing.T) {
+	if os.Getenv("ALSA_PROBE") == "" {
+		t.Skip("set ALSA_PROBE=1 on a device with a sound card")
+	}
+	const channels, rate = 4, 16000
+	c, err := Open(0, 22, Config{Channels: channels, Rate: rate, Format: FormatS24_3LE, Bits: 24, PeriodSize: 320, Periods: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	buf := make([]byte, c.FrameBytes()*320)
+	var sum [channels]float64
+	var peak [channels]int32
+	frames := 0
+	for frames < 2*rate {
+		n, err := c.Read(buf)
+		if err != nil {
+			continue
+		}
+		for f := 0; f+c.FrameBytes() <= n; f += c.FrameBytes() {
+			for ch := range channels {
+				b := buf[f+ch*3:]
+				v := int32(b[0]) | int32(b[1])<<8 | int32(int8(b[2]))<<16
+				sum[ch] += float64(v) * float64(v)
+				peak[ch] = max(peak[ch], v, -v)
+			}
+			frames++
+		}
+	}
+	for ch := range channels {
+		t.Logf("channel %d: rms %.1f peak %d over %d frames", ch, math.Sqrt(sum[ch]/float64(frames)), peak[ch], frames)
+	}
+}
+
 func TestProbeMixer(t *testing.T) {
 	if os.Getenv("ALSA_PROBE") == "" {
 		t.Skip("set ALSA_PROBE=1 on a device with a sound card")

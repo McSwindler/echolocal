@@ -72,6 +72,7 @@ type Player struct {
 
 	pathMu sync.Mutex
 	out    Output
+	seq    sequences
 
 	voiceMu    sync.Mutex
 	voice      Resampler
@@ -89,6 +90,9 @@ type Player struct {
 
 	// fed is whether the last block had anything in it, and belongs to the write loop alone.
 	fed bool
+
+	tap    atomic.Pointer[tapTo]
+	tapBuf []int16
 
 	// underruns is the card running out while we were away. Write blocks against the whole ring, so
 	// each one means the loop was starved for as long as the ring is deep.
@@ -211,7 +215,7 @@ func (p *Player) device() (*alsa.Playback, *alsa.Mixer) {
 func (p *Player) route() {
 	p.pathMu.Lock()
 	defer p.pathMu.Unlock()
-	p.apply(pathSequence[p.out])
+	p.apply(p.seq.path[p.out])
 }
 
 // amp switches the speaker amplifier.
@@ -222,11 +226,11 @@ func (p *Player) amp(on bool) {
 	if p.out != OutputSpeaker {
 		return
 	}
-	value := "Off"
 	if on {
-		value = "On"
+		p.apply(p.seq.on)
+		return
 	}
-	p.apply([]kctl{{name: AmpSwitch, value: value}})
+	p.apply(p.seq.off)
 }
 
 // Output reports which output the player is driving.
@@ -244,12 +248,11 @@ func (p *Player) setOutput(out Output) {
 		p.pathMu.Unlock()
 		return
 	}
+	was := p.out
 	p.out = out
-	p.apply([]kctl{{name: AmpSwitch, value: "Off"}})
-	if out == OutputSpeaker {
-		p.apply(headphoneOff)
-	}
-	p.apply(pathSequence[out])
+	p.apply(p.seq.off)
+	p.apply(p.seq.leave[was])
+	p.apply(p.seq.path[out])
 	p.pathMu.Unlock()
 
 	time.Sleep(codecSettle)
@@ -272,6 +275,27 @@ func (p *Player) watchJack(ctx context.Context) {
 			p.setOutput(DetectOutput())
 		}
 	}
+}
+
+// choose picks the board's sequences once the mixer is held, by the controls it has.
+func (p *Player) choose() {
+	_, mixer := p.device()
+	if mixer == nil {
+		return
+	}
+	seq := sequencesFor(func(c string) bool {
+		_, err := mixer.Find(c)
+		return err == nil
+	})
+	p.pathMu.Lock()
+	p.seq = seq
+	p.pathMu.Unlock()
+}
+
+func (p *Player) sequences() sequences {
+	p.pathMu.Lock()
+	defer p.pathMu.Unlock()
+	return p.seq
 }
 
 // apply writes a mixer sequence in order, logging failures and continuing.
@@ -308,7 +332,8 @@ func (p *Player) Run(ctx context.Context) error {
 	// The order the vendor HAL uses on a route change: route with the amplifier off, let the
 	// codec sit idle, enable the amplifier, then feed.
 	out := p.Output()
-	p.apply(initSequence)
+	p.choose()
+	p.apply(p.sequences().init)
 	p.route()
 
 	select {
@@ -359,6 +384,20 @@ func (p *Player) send(ctx context.Context, to io.Writer, buf []byte) error {
 	}
 }
 
+// Tap is given each period's mix, stereo and after volume.
+type Tap interface{ Offer(mix []int16) }
+
+type tapTo struct{ Tap }
+
+// SetTap hands every period to t, or stops when t is nil.
+func (p *Player) SetTap(t Tap) {
+	if t == nil {
+		p.tap.Store(nil)
+		return
+	}
+	p.tap.Store(&tapTo{t})
+}
+
 // fill takes what is queued and pads the rest with silence.
 func (p *Player) fill(buf []byte) {
 	p.mu.Lock()
@@ -403,6 +442,11 @@ func (p *Player) fill(buf []byte) {
 		makeup = float32(p.tuning.Makeup(float64(p.step.Load()) / VolumeSteps))
 	}
 
+	tap := p.tap.Load()
+	if tap != nil && cap(p.tapBuf) < period*Channels {
+		p.tapBuf = make([]int16, period*Channels)
+	}
+
 	gain := p.Volume()
 	for i, j := 0, 0; i < period*Channels; i, j = i+Channels, j+1 {
 		var l, r int32
@@ -418,6 +462,9 @@ func (p *Player) fill(buf []byte) {
 		if i+1 < len(rendered) {
 			r += int32(rendered[i+1])
 		}
+		if tap != nil {
+			p.tapBuf[i], p.tapBuf[i+1] = clamp(int32(float32(l)*gain)), clamp(int32(float32(r)*gain))
+		}
 		if mono {
 			l = (l + r) / 2
 			r = l
@@ -428,6 +475,9 @@ func (p *Player) fill(buf []byte) {
 		}
 		binary.LittleEndian.PutUint16(buf[i*2:], uint16(int16(float32(clamp(l))*gain)))
 		binary.LittleEndian.PutUint16(buf[(i+1)*2:], uint16(int16(float32(clamp(r))*gain)))
+	}
+	if tap != nil {
+		tap.Offer(p.tapBuf[:period*Channels])
 	}
 	if !tuned {
 		return
@@ -682,7 +732,7 @@ func (p *Player) Volume() float32 { return math.Float32frombits(p.volume.Load())
 // Close mutes the codec, turns the amplifier off and lets the device go. The Player stays usable:
 // Start can take it again, which is how a restart works.
 func (p *Player) Close() error {
-	p.apply(initSequence)
+	p.apply(p.sequences().close)
 
 	p.devMu.Lock()
 	pb, mixer := p.pb, p.mixer

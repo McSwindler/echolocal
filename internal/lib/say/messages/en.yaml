@@ -27,6 +27,45 @@ settings.features: Features
 settings.theme: Theme
 settings.drawer: Drawer
 settings.marks: Privacy marks
+settings.clock: Clock
+settings.idle: Idle screen
+settings.debug: Debug
+
+rail.sleep: Sleep
+rail.media: Media
+
+debug.title: Debug
+debug.visuals: Visuals
+debug.fps: Visual max fps
+debug.fps.value: "{{.N}} fps"
+debug.seed: Visual seed
+debug.seed.random: Random
+debug.seed.value: "#{{.N}}"
+
+idle.title: Idle screen
+idle.after: Comes up after
+idle.after.title: Idle after
+idle.visual1: Visual 1
+idle.visual2: Visual 2
+idle.source1: Visual 1 listens to
+idle.source2: Visual 2 listens to
+idle.face: Clock face
+idle.vertical: Vertical position
+idle.horizontal: Horizontal position
+idle.size: Clock size
+idle.none: None
+
+clock.title: Clock
+clock.face: Face
+clock.position: Position
+clock.size: Size
+clock.color: Color
+clock.date: Show the date
+clock.hours: 24 hour clock
+clock.logo: Logo
+clock.position.title: Clock position
+clock.size.title: Clock size
+clock.color.title: Clock color
 
 # The subsystems the device can be told to run.
 features.title: Features
@@ -34,9 +73,109 @@ features.sendspin: Sendspin
 features.sendspin.hint: Whole-home audio
 features.proxy: Bluetooth proxy
 features.proxy.hint: Bluetooth LE proxy for Home Assistant
+features.cast: Cast receiver
+features.cast.hint: Cast from a phone or an app
+features.youtube: YouTube
+features.youtube.hint: When something is cast from YouTube
+
+youtube.title: YouTube
+youtube.demand: Connect only when casting
+youtube.demand.hint: Otherwise stays connected to YouTube
+youtube.skip: Skip segments
+youtube.skip.none: None
+youtube.skip.some: "{{.N}} kinds"
+youtube.delay: Live delay
+youtube.delay.hint: How far behind live a stream plays
+youtube.delay.value: "{{.N}} s"
+
+skip.sponsor: Sponsor
+skip.selfpromo: Unpaid or self promotion
+skip.interaction: Interaction reminder
+skip.intro: Intermission or intro animation
+skip.outro: Endcards or credits
+skip.preview: Preview or recap
+skip.hook: Hook or greetings
+skip.music_offtopic: Non-music section
+skip.filler: Tangents or jokes
 
 # The player, on the device itself.
-player.title: Player
 player.playing: Playing
 player.paused: Paused
 player.idle: Nothing playing
+player.now: Now playing
+player.next: Up next
+player.live: LIVE
+
+position.top: Top
+position.center: Center
+position.bottom: Bottom
+size.nano: Nano
+size.micro: Micro
+size.mini: Mini
+size.small: Small
+size.medium: Medium
+size.large: Large
+face.none: None
+face.plain: Plain
+face.cards: Cards
+face.analog: Analog
+face.analog-seconds: Analog seconds
+face.segments: Segments
+face.words: Words
+face.overlap: Overlap
+ink.theme: Theme
+ink.amber: Amber
+ink.red: Red
+ink.green: Green
+ink.cyan: Cyan
+ink.blue: Blue
+ink.violet: Violet
+ink.pink: Pink
+hours.24: 24 hour
+hours.12: 12 hour
+align.left: Left
+align.center: Center
+align.right: Right
+source.both: Microphone and speaker
+source.mic: Microphone
+source.speaker: Speaker
+delay.never: Never
+delay.30s: 30 seconds
+delay.1m: 1 minute
+delay.2m: 2 minutes
+delay.5m: 5 minutes
+delay.15m: 15 minutes
+
+visual.lens-flares: Lens Flares
+visual.classic-vu: Classic VU
+visual.aurora: Aurora
+visual.mercury: Mercury
+visual.ribbons: Ribbons
+visual.galaxy: Galaxy
+visual.halo: Halo
+visual.pulsar: Pulsar
+visual.phosphor: Phosphor
+visual.tesla: Tesla
+visual.orb: Orb
+visual.digital-vu: Digital VU
+visual.paint-splash: Paint Splash
+visual.fireworks: Fireworks
+visual.synthwave: Synthwave
+visual.hal-9000: HAL 9000
+visual.mother: Mother
+visual.light-cycles: Light Cycles
+visual.lcars: LCARS
+visual.pipboy-3: PB 3000
+visual.pipboy-nv: PB New Vegas
+visual.pipboy-4: PB Mark IV
+visual.pipboy-76: PB 2000
+visual.koi-pond: Koi Pond
+visual.rain-on-glass: Rain on Glass
+visual.cymatics: Cymatics
+visual.fire: Fire
+visual.neon-sign: Neon Sign
+visual.lava-lamp: Lava Lamp
+visual.ink-in-water: Ink in Water
+visual.thunderstorm: Thunderstorm
+visual.fireflies: Fireflies
+visual.matrix: Matrix

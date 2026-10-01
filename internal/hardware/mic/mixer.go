@@ -39,10 +39,11 @@ type mix struct {
 // only when its coefficients are there to read, and reading them waits until something asks: they
 // are 460 KB of text on the vendor partition, and the mix may never be chosen.
 var mixes = sync.OnceValue(func() []mix {
-	out := []mix{
-		{config.MixCenter, func() Mixer { return Center{} }},
-		{config.MixDelaySum, func() Mixer { return NewBeamformer() }},
+	out := []mix{{config.MixCenter, func() Mixer { return Center{} }}}
+	if !beamforming {
+		return out
 	}
+	out = append(out, mix{config.MixDelaySum, func() Mixer { return NewBeamformer() }})
 
 	w, err := subband.Load(subband.VendorDir)
 	if err != nil {

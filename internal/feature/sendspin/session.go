@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/feature/media"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
 	"github.com/ygelfand/echolocal/internal/layout"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
@@ -193,6 +194,7 @@ func (s *session) began(start protocol.StreamStart) {
 	}
 	s.dec = dec
 	s.opened = true
+	media.Get().Began(s.player)
 	if first {
 		s.bg.Took(s.out)
 		s.player.setState(statePlaying)

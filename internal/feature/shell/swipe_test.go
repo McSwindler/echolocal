@@ -8,6 +8,8 @@ import (
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
 
+func rightEdge() int { return panelWidth() - 20 }
+
 // counted is a view that says whether it was tapped, and where.
 type counted struct {
 	taps   int
@@ -51,8 +53,19 @@ func TestAVerticalSwipeDoesNotCloseThePage(t *testing.T) {
 	}
 }
 
-// Sideways still closes, either way: the gesture works from whichever hand is nearer.
-func TestASidewaysSwipeClosesThePage(t *testing.T) {
+func TestASidewaysSwipeFromTheBackEdgeClosesThePage(t *testing.T) {
+	s := &Shell{}
+	page := &counted{}
+	s.Push(page)
+
+	stroke(s, page, rightEdge(), 500, rightEdge()-500, 505)
+
+	if s.Open() {
+		t.Error("a swipe in from the right edge left the page up")
+	}
+}
+
+func TestASidewaysSwipeMidPageDoesNotCloseIt(t *testing.T) {
 	for _, to := range []int{100, 1100} {
 		s := &Shell{}
 		page := &counted{}
@@ -60,8 +73,8 @@ func TestASidewaysSwipeClosesThePage(t *testing.T) {
 
 		stroke(s, page, 600, 500, to, 505)
 
-		if s.Open() {
-			t.Errorf("a swipe to x=%d left the page up", to)
+		if !s.Open() {
+			t.Errorf("a swipe from mid page to x=%d closed the page", to)
 		}
 	}
 }
