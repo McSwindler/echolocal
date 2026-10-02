@@ -54,11 +54,6 @@ type cardsLayout struct {
 	Side int
 }
 
-// bounds is everything the face covers.
-func (l cardsLayout) bounds() ui.Rect {
-	return l.First.Union(l.Second).Union(l.Date)
-}
-
 // cardsArrange places the pieces, so that drawing them and saying where they are cannot disagree.
 func cardsArrange(in ui.Rect, r Reading) (cardsLayout, *ui.Font) {
 	// Side by side when there is width for it and stacked when there is not. The same face turned,
@@ -130,40 +125,6 @@ func (cards) Draw(s ui.Surface, in ui.Rect, r Reading, palette theme.Theme) {
 	if r.Dated() {
 		ui.DrawText(s, date, l.Date.X, l.Date.Y, palette.Muted, palette.Background, r.Date)
 	}
-}
-
-// Damaged is the cards whose number changed, and the date line if it did.
-//
-// A minute tick moves one card out of two, which is why this face is worth declaring: the hour card
-// and everything around it stays as it is for fifty-nine minutes out of sixty.
-//
-// The block is laid out against the box rather than the reading, so it normally does not move. When
-// it does — a date appearing, or one whose text measures differently — the cards shift with it and
-// nothing narrower than both layouts together is safe.
-func (cards) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	hourFrom, minuteFrom, okFrom := lines(from)
-	hourTo, minuteTo, okTo := lines(to)
-
-	// Either reading drawn by the fallback instead. Two of them is the plain face's question to
-	// answer; one of each is a face changing under the reading, and that repaints everything.
-	if !okFrom || !okTo {
-		if !okFrom && !okTo {
-			return plain{}.Damaged(in, from, to)
-		}
-		return in
-	}
-
-	before, _ := cardsArrange(in, from)
-	after, _ := cardsArrange(in, to)
-
-	// The suffix is drawn on the hour's card, so it is that card that changes when it does.
-	at := moved(hourFrom != hourTo || from.Suffix != to.Suffix, before.First, after.First).
-		Union(moved(minuteFrom != minuteTo, before.Second, after.Second)).
-		Union(moved(from.Date != to.Date, before.Date, after.Date))
-
-	// A pixel out, because a glyph may reach a little past what measuring it says: a left side
-	// bearing can be negative and antialiasing softens an edge outwards.
-	return at.Inset(-1)
 }
 
 // drawCard is one panel: the ground, the seam across it, and the number.

@@ -56,23 +56,6 @@ func (plain) Draw(s ui.Surface, in ui.Rect, r Reading, palette theme.Theme) {
 	}
 }
 
-// bounds is everything the layout covers.
-func (l layout) bounds() ui.Rect { return l.Time.Union(l.Suffix).Union(l.Date) }
-
-// Damaged is the two layouts together.
-//
-// Both, not the new one: the text is centered, so a reading whose time is a character wider moves
-// everything: 9:59 to 10:00 shifts the whole line left. What the old layout covered has to be
-// repainted or the ghost of it stays on the screen.
-func (plain) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	before, _ := arrange(from, in)
-	after, _ := arrange(to, in)
-
-	// A pixel out, because a glyph may reach a little past what measuring it says: a left side
-	// bearing can be negative and antialiasing softens an edge outwards.
-	return before.bounds().Union(after.bounds()).Inset(-1)
-}
-
 // arrange places the reading in a box, centered as a block rather than each line on its own: the date
 // sits under the time, and the two move together.
 func arrange(r Reading, in ui.Rect) (layout, fonts) {

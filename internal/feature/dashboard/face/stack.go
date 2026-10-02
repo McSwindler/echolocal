@@ -160,37 +160,6 @@ func stackArrange(in ui.Rect, hour, minute string, r Reading) (stackLayout, stac
 	return l, m
 }
 
-// Damaged is the lines whose text changed, and anything the block's own resizing moved.
-//
-// The block is sized to the largest that fits, from the reading, so a time one character wider
-// shrinks the type and shifts every piece — including the ones whose text did not change. That is
-// what moved is for, and why this cannot be a comparison of strings alone.
-func (stack) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	hourFrom, minuteFrom, okFrom := lines(from)
-	hourTo, minuteTo, okTo := lines(to)
-
-	// Either reading drawn by the fallback instead. Two of them is the plain face's question to
-	// answer; one of each is a face changing under the reading, and that repaints everything.
-	if !okFrom || !okTo {
-		if !okFrom && !okTo {
-			return plain{}.Damaged(in, from, to)
-		}
-		return in
-	}
-
-	before, _ := stackArrange(in, hourFrom, minuteFrom, from)
-	after, _ := stackArrange(in, hourTo, minuteTo, to)
-
-	at := moved(hourFrom != hourTo, before.Hour, after.Hour).
-		Union(moved(minuteFrom != minuteTo, before.Minute, after.Minute)).
-		Union(moved(from.Suffix != to.Suffix, before.Suffix, after.Suffix)).
-		Union(moved(from.Date != to.Date, before.Date, after.Date))
-
-	// A pixel out, because a glyph may reach a little past what measuring it says: a left side
-	// bearing can be negative and antialiasing softens an edge outwards.
-	return at.Inset(-1)
-}
-
 // layoutStack measures the face at the largest size that fits the box.
 //
 // Width is bounded first and then the ink is checked against the box. Sizing two lines off a share

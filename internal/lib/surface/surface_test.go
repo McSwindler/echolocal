@@ -20,7 +20,7 @@ type fake struct {
 	scenes chan []uint32
 	gl     chan []uint32
 	drm    chan []uint32
-	shared map[uint32]*os.File
+	shared chan *os.File
 	ver    uint32
 }
 
@@ -36,7 +36,7 @@ func newFake(t *testing.T) (*fake, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fake{t: t, ln: ln, frames: make(chan []uint32, 8), scenes: make(chan []uint32, 8), gl: make(chan []uint32, 8), drm: make(chan []uint32, 8), shared: map[uint32]*os.File{}, ver: version}
+	f := &fake{t: t, ln: ln, frames: make(chan []uint32, 8), scenes: make(chan []uint32, 8), gl: make(chan []uint32, 8), drm: make(chan []uint32, 8), shared: make(chan *os.File, 8), ver: version}
 	t.Cleanup(func() { ln.Close() })
 	go f.serve()
 	return f, path
@@ -60,7 +60,7 @@ func (f *fake) serve() {
 			id, w, h := words[0], words[3], words[4]
 			file, _ := os.CreateTemp(f.t.TempDir(), "layer")
 			file.Truncate(int64(w * h * 4))
-			f.shared[id] = file
+			f.shared <- file
 			answer(c, opCreate, syscall.UnixRights(int(file.Fd())), id, 0, w*4)
 		case opFrame:
 			f.frames <- words
@@ -184,7 +184,7 @@ func TestALayersPixelsAreSharedWithTheHelper(t *testing.T) {
 	}
 	l.Pixels[l.Stride+4] = 0xab
 	got := make([]byte, 32)
-	f.shared[7].ReadAt(got, 0)
+	(<-f.shared).ReadAt(got, 0)
 	if got[20] != 0xab {
 		t.Errorf("the helper sees %x", got[20])
 	}

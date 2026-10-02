@@ -109,38 +109,6 @@ func overlapArrange(in ui.Rect, hour, minute string, r Reading) (overlapLayout, 
 	return l, m
 }
 
-// Damaged is the lines whose text changed, and anything the block's own resizing moved.
-//
-// The two blocks cross on purpose, and that costs nothing here: where they overlap it is the
-// minutes that are drawn last, so everything the crossing changes is inside the minutes' own
-// rectangle. Repainting it redraws the hour underneath, clipped, and the composite comes out the
-// same as a full repaint.
-func (overlap) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	hourFrom, minuteFrom, okFrom := lines(from)
-	hourTo, minuteTo, okTo := lines(to)
-
-	// Either reading drawn by the fallback instead. Two of them is the plain face's question to
-	// answer; one of each is a face changing under the reading, and that repaints everything.
-	if !okFrom || !okTo {
-		if !okFrom && !okTo {
-			return plain{}.Damaged(in, from, to)
-		}
-		return in
-	}
-
-	before, _ := overlapArrange(in, hourFrom, minuteFrom, from)
-	after, _ := overlapArrange(in, hourTo, minuteTo, to)
-
-	at := moved(hourFrom != hourTo, before.Hour, after.Hour).
-		Union(moved(minuteFrom != minuteTo, before.Minute, after.Minute)).
-		Union(moved(from.Suffix != to.Suffix, before.Suffix, after.Suffix)).
-		Union(moved(from.Date != to.Date, before.Date, after.Date))
-
-	// A pixel out, because a glyph may reach a little past what measuring it says: a left side
-	// bearing can be negative and antialiasing softens an edge outwards.
-	return at.Inset(-1)
-}
-
 // overlapped is the face measured.
 type overlapped struct {
 	line, small, date *ui.Font

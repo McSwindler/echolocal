@@ -150,39 +150,3 @@ func (a analog) Draw(s ui.Surface, in ui.Rect, r Reading, palette theme.Theme) {
 		ui.DrawText(s, date, l.Date.X, l.Date.Y, palette.Muted, palette.Background, r.Date)
 	}
 }
-
-// Damaged is where the hands were and where they are.
-//
-// The one with a second hand is what makes this worth having. It repaints every second, and what
-// actually changes is one thin sliver six degrees wide — so this is the difference between 2.3
-// million pixels a second and a few thousand.
-//
-// The numerals and the cap do not move, so they are not declared. If the dial itself shifts — a
-// date of a different width changes what room is left for it — then they do, and nothing narrower
-// than the whole box is safe.
-func (a analog) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	before, _, okFrom := a.arrange(in, from)
-	after, _, okTo := a.arrange(in, to)
-
-	// Either reading drawn by the fallback instead. Two of them is the plain face's question to
-	// answer; one of each is a face changing under the reading, and that repaints everything.
-	if !okFrom || !okTo {
-		if !okFrom && !okTo {
-			return plain{}.Damaged(in, from, to)
-		}
-		return in
-	}
-
-	// The dial moved, so the numerals moved with it.
-	if before.CX != after.CX || before.CY != after.CY || before.Dial != after.Dial {
-		return in
-	}
-
-	at := spans(before.Hour).Union(spans(after.Hour)).
-		Union(spans(before.Minute)).Union(spans(after.Minute)).
-		Union(spans(before.Second)).Union(spans(after.Second)).
-		Union(moved(from.Date != to.Date, before.Date, after.Date))
-
-	// A pixel out, because a filled edge at an angle is antialiased outwards.
-	return at.Inset(-1)
-}

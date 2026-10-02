@@ -64,14 +64,6 @@ type segmentsLayout struct {
 	Date ui.Rect
 }
 
-func (l segmentsLayout) bounds() ui.Rect {
-	at := l.Date
-	for _, c := range l.Cells {
-		at = at.Union(c.At)
-	}
-	return at
-}
-
 // segmentsArrange places the lamps, so that drawing them and saying where they are cannot disagree.
 func segmentsArrange(in ui.Rect, r Reading) (segmentsLayout, *ui.Font) {
 	hour, minute, ok := lines(r)
@@ -155,42 +147,6 @@ func (segments) Draw(s ui.Surface, in ui.Rect, r Reading, palette theme.Theme) {
 	if r.Dated() {
 		ui.DrawText(s, date, l.Date.X, l.Date.Y, palette.Muted, palette.Background, r.Date)
 	}
-}
-
-// Damaged is the lamps whose digit changed.
-//
-// The best of the faces for this. Every part of it is a fixed fraction of the box, so the cells do
-// not move as the time does — a minute tick changes one of four, and the off segments that make the
-// ghost stay exactly as they were.
-func (segments) Damaged(in ui.Rect, from, to Reading) ui.Rect {
-	_, _, okFrom := lines(from)
-	_, _, okTo := lines(to)
-
-	// Either reading drawn by the fallback instead. Two of them is the plain face's question to
-	// answer; one of each is a face changing under the reading, and that repaints everything.
-	if !okFrom || !okTo {
-		if !okFrom && !okTo {
-			return plain{}.Damaged(in, from, to)
-		}
-		return in
-	}
-
-	before, _ := segmentsArrange(in, from)
-	after, _ := segmentsArrange(in, to)
-
-	// A different number of lamps is a different display, not a different time.
-	if len(before.Cells) != len(after.Cells) {
-		return before.bounds().Union(after.bounds()).Inset(-1)
-	}
-
-	at := moved(from.Date != to.Date, before.Date, after.Date)
-	for i := range before.Cells {
-		at = at.Union(moved(before.Cells[i].Ch != after.Cells[i].Ch,
-			before.Cells[i].At, after.Cells[i].At))
-	}
-
-	// A pixel out, because a bar's edge is antialiased outwards.
-	return at.Inset(-1)
 }
 
 // runWidth is how wide the whole time comes out at a digit height.

@@ -35,24 +35,6 @@ func hand(cx, cy, length, width int, deg float64) []ui.Point {
 	}
 }
 
-// spans is the rectangle a polygon covers, which is what has to be repainted to redraw it.
-func spans(points []ui.Point) ui.Rect {
-	if len(points) == 0 {
-		return ui.Rect{}
-	}
-
-	left, top := points[0].X, points[0].Y
-	right, bottom := left, top
-
-	for _, p := range points[1:] {
-		left, right = min(left, p.X), max(right, p.X)
-		top, bottom = min(top, p.Y), max(bottom, p.Y)
-	}
-
-	// Both ends included: a shape from x to x covers one pixel, not none.
-	return ui.Rect{X: left, Y: top, W: right - left + 1, H: bottom - top + 1}
-}
-
 // numerals puts 12, 3, 6 and 9 around the center, each centered on its own position rather than on
 // its line box: a numeral placed by its box sits low, because the box reserves a descent the digits
 // do not use.

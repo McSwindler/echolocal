@@ -37,46 +37,6 @@ type Ticking interface {
 	Ticks() bool
 }
 
-// Damaging is a face that knows which part of its box one reading replacing another changes.
-//
-// Opt in, like Ticking, and for the same reason: a face that does not answer gets the whole box
-// repainted, which is what every face got before any of them answered. Getting it wrong leaves a
-// stale strip, so a face only implements this alongside a test that renders both readings and
-// checks the rectangle holds everything ui.Changed found.
-type Damaging interface {
-	Damaged(in ui.Rect, from, to Reading) ui.Rect
-}
-
-// moved is what one piece of a face costs to repaint, given where it was and where it is.
-//
-// A piece is damaged when its text changed or when it moved, and a face that only checks the text
-// misses the whole class of change that matters most: the block is sized and centred against the
-// reading, so a time one character wider shifts pieces whose own text did not change at all. Both
-// rectangles, because the old one has to be painted over as well as the new one drawn.
-func moved(changed bool, before, after ui.Rect) ui.Rect {
-	if !changed && before == after {
-		return ui.Rect{}
-	}
-	return before.Union(after)
-}
-
-// Damage is what redrawing from one reading to another repaints, and whether the face knew.
-//
-// Not knowing is reported rather than answered with the box, because the caller has more to repaint
-// than the face does — the mark, and whatever else the dashboard put on the screen.
-func Damage(name config.Face, in ui.Rect, from, to Reading) (ui.Rect, bool) {
-	d, ok := Of(name).(Damaging)
-	if !ok {
-		return ui.Rect{}, false
-	}
-
-	at := d.Damaged(in, from, to)
-	if at.W <= 0 || at.H <= 0 {
-		return ui.Rect{}, false
-	}
-	return at, true
-}
-
 // Ticks reports whether the named face changes within the minute.
 func Ticks(name config.Face) bool {
 	t, ok := Of(name).(Ticking)
