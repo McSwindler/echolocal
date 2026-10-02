@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/board"
@@ -16,6 +17,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/feature/theme"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/gpu"
+	"github.com/ygelfand/echolocal/internal/hardware/touch"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/reveal"
 )
@@ -94,6 +96,16 @@ func (s *Splash) Run(ctx context.Context) error {
 		}
 	}
 
+	var skipped, offering atomic.Bool
+	skip := skipBox(w, h)
+	stopSkip := touch.Contacts.Listen(func(c touch.Contact) {
+		if c.Phase == touch.Down && offering.Load() && skip.Contains(c.X, c.Y) {
+			slog.Info("boot screen skipped")
+			skipped.Store(true)
+		}
+	})
+	defer stopSkip()
+
 	began := time.Now()
 	tick := time.NewTicker(frame)
 	defer tick.Stop()
@@ -129,6 +141,7 @@ func (s *Splash) Run(ctx context.Context) error {
 			if listed.IsZero() {
 				listed = now
 			}
+			offering.Store(!settled(progress))
 			if text := summary(progress); text != said {
 				said = text
 				s.hold.Show(func(p *display.Panel) error {
@@ -147,7 +160,7 @@ func (s *Splash) Run(ctx context.Context) error {
 		} else if done.IsZero() {
 			done = now
 		}
-		if finishing.IsZero() && !listed.IsZero() && !done.IsZero() && now.Sub(done) >= settle && (!waited || now.Sub(listed) >= listFor) {
+		if finishing.IsZero() && !listed.IsZero() && !done.IsZero() && now.Sub(done) >= settle && (!waited || now.Sub(listed) >= listFor) && (settled(progress) || skipped.Load()) {
 			finishing = now
 		}
 		if !finishing.IsZero() && m.Trace >= 1 {

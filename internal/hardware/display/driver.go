@@ -79,6 +79,10 @@ type Driver struct {
 	panel  *Panel
 	claims []*Claim
 
+	opened   bool
+	stranded func(*Panel) error
+	dropped  error
+
 	// info is what the panel says about itself, kept here because the boot screen asks for it
 	// while the render goroutine is drawing, and the panel's own geometry is what drawing reads.
 	info string
@@ -212,8 +216,8 @@ func (d *Driver) Startup() component.Progress {
 
 // Start takes the framebuffer, and again on every restart: it may have been taken while we were
 // gone.
-func (d *Driver) Start(context.Context) error {
-	p, err := d.open()
+func (d *Driver) Start(ctx context.Context) error {
+	p, err := d.open(ctx)
 	if err != nil {
 		return err
 	}
@@ -225,6 +229,7 @@ func (d *Driver) Start(context.Context) error {
 	// A panel opens at how the device is mounted; the device may have been turned since. Before it
 	// is published, so nothing else can be looking at it while this writes its geometry.
 	p.Turn(rot)
+	p.Dropped.Listen(d.drop)
 
 	d.mu.Lock()
 	old := d.panel
@@ -777,13 +782,32 @@ func (d *Driver) wake() {
 }
 
 // render draws the claims that are showing, lowest first.
+func (d *Driver) drop(err error) {
+	d.mu.Lock()
+	d.dropped = err
+	d.mu.Unlock()
+	d.wake()
+}
+
 func (d *Driver) render() error {
 	d.mu.Lock()
-	panel, rot, parting := d.panel, d.rot, d.parting
+	panel, rot, parting, dropped := d.panel, d.rot, d.parting, d.dropped
+	d.dropped = nil
 	d.mu.Unlock()
 
 	if parting {
 		return nil
+	}
+
+	if dropped != nil && panel != nil && panel.surf != nil && panel.surf.Err() != nil {
+		slog.Warn("display: lost the helper", "err", dropped)
+		if err := panel.redial(dropped); err != nil {
+			return err
+		}
+		slog.Info("display: helper back")
+		d.mu.Lock()
+		d.forced = true
+		d.mu.Unlock()
 	}
 
 	stack, clear := d.stack()

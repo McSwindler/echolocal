@@ -63,6 +63,13 @@ func Get() *Time {
 
 func (t *Time) Name() string { return "time" }
 
+func (t *Time) Startup() component.Progress {
+	if t.set.Load() {
+		return component.Progress{Done: true, Background: true}
+	}
+	return component.Progress{Doing: "waiting for Home Assistant", Background: true}
+}
+
 // Handle takes the answer, and asks the question the first time a client says anything.
 func (t *Time) Handle(_ context.Context, conn *esphome.Conn, msg proto.Message) error {
 	if reply, ok := msg.(*api.GetTimeResponse); ok {

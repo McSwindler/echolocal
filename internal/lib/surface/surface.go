@@ -9,6 +9,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 )
 
 const (
@@ -162,6 +164,47 @@ type Client struct {
 	Width  int
 	Height int
 	layers map[uint32]*Layer
+
+	errMu sync.Mutex
+	err   error
+
+	Dropped hook.Hook[error]
+}
+
+const watchEvery = 500 * time.Millisecond
+
+var errHungUp = errors.New("surface: the helper hung up")
+
+// Err is what ended the connection, nil while it is up.
+func (c *Client) Err() error {
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return c.err
+}
+
+func (c *Client) drop(err error) error {
+	if err == nil {
+		return nil
+	}
+	c.errMu.Lock()
+	first := c.err == nil
+	if first {
+		c.err = err
+	}
+	c.errMu.Unlock()
+	if first {
+		c.Dropped.Emit(err)
+	}
+	return err
+}
+
+func (c *Client) watch() {
+	for c.Err() == nil {
+		time.Sleep(watchEvery)
+		if c.hungUp() {
+			c.drop(errHungUp)
+		}
+	}
 }
 
 func Dial(path string) (*Client, error) {
@@ -184,6 +227,7 @@ func Dial(path string) (*Client, error) {
 		return nil, ErrVersion
 	}
 	cl.Width, cl.Height = int(words[1]), int(words[2])
+	go cl.watch()
 	return cl, nil
 }
 
@@ -199,6 +243,11 @@ func DialWait(path string, wait time.Duration) (*Client, error) {
 }
 
 func (c *Client) Close() error {
+	c.errMu.Lock()
+	if c.err == nil {
+		c.err = net.ErrClosed
+	}
+	c.errMu.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, l := range c.layers {
@@ -717,14 +766,14 @@ func (c *Client) sendData(op uint32, data []byte, words ...uint32) error {
 	}
 	if len(data) == 0 {
 		_, err := c.c.Write(head)
-		return err
+		return c.drop(err)
 	}
 	bufs := net.Buffers{head, data}
 	if pad > len(data) {
 		bufs = append(bufs, make([]byte, pad-len(data)))
 	}
 	_, err := bufs.WriteTo(c.c)
-	return err
+	return c.drop(err)
 }
 
 func (c *Client) recv(want uint32) ([]uint32, int, error) {
@@ -732,7 +781,7 @@ func (c *Client) recv(want uint32) ([]uint32, int, error) {
 	oob := make([]byte, syscall.CmsgSpace(4))
 	n, oobn, _, _, err := c.c.ReadMsgUnix(hdr, oob)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, c.drop(err)
 	}
 	fd := -1
 	if oobn > 0 {
@@ -744,7 +793,7 @@ func (c *Client) recv(want uint32) ([]uint32, int, error) {
 	}
 	if err := fill(c.c, hdr[n:]); err != nil {
 		closeFD(fd)
-		return nil, -1, err
+		return nil, -1, c.drop(err)
 	}
 	op, size := binary.LittleEndian.Uint32(hdr[0:]), binary.LittleEndian.Uint32(hdr[4:])
 	if op != want || size%4 != 0 || size > 64 {
@@ -754,7 +803,7 @@ func (c *Client) recv(want uint32) ([]uint32, int, error) {
 	body := make([]byte, size)
 	if err := fill(c.c, body); err != nil {
 		closeFD(fd)
-		return nil, -1, err
+		return nil, -1, c.drop(err)
 	}
 	words := make([]uint32, size/4)
 	for i := range words {
@@ -766,7 +815,7 @@ func (c *Client) recv(want uint32) ([]uint32, int, error) {
 func (c *Client) recvData(want uint32, n int) ([]uint32, []byte, error) {
 	hdr := make([]byte, 8)
 	if err := fill(c.c, hdr); err != nil {
-		return nil, nil, err
+		return nil, nil, c.drop(err)
 	}
 	op, size := binary.LittleEndian.Uint32(hdr[0:]), binary.LittleEndian.Uint32(hdr[4:])
 	if op != want || size%4 != 0 || size < uint32(4*n) || size > 64<<20 {
@@ -774,7 +823,7 @@ func (c *Client) recvData(want uint32, n int) ([]uint32, []byte, error) {
 	}
 	body := make([]byte, size)
 	if err := fill(c.c, body); err != nil {
-		return nil, nil, err
+		return nil, nil, c.drop(err)
 	}
 	words := make([]uint32, n)
 	for i := range words {

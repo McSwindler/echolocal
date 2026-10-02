@@ -8,6 +8,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/surface"
 )
 
@@ -64,6 +65,8 @@ type Panel struct {
 	f    *os.File
 	mem  []byte
 	var_ varInfo
+
+	Dropped hook.Hook[error]
 
 	stride int
 	fbW    int // framebuffer width, portrait
@@ -180,8 +183,8 @@ func (p *Panel) Info() string {
 	if p.surf != nil {
 		return fmt.Sprintf("%dx%d %s (native %dx%d, SurfaceFlinger through %s)", p.Width, p.Height, p.rot, p.fbW, p.fbH, p.sock)
 	}
-	s := fmt.Sprintf("%dx%d %s (fb %dx%d, stride %d, %d bpp, double-buffered=%v, panned)",
-		p.Width, p.Height, p.rot, p.fbW, p.fbH, p.stride, p.var_.BitsPerPixel, p.doubled)
+	s := fmt.Sprintf("%dx%d %s (fb %dx%d, stride %d, %d bpp, red at bit %d, double-buffered=%v, panned)",
+		p.Width, p.Height, p.rot, p.fbW, p.fbH, p.stride, p.var_.BitsPerPixel, p.var_.Red.Offset, p.doubled)
 	if p.BlankErr != nil {
 		s += fmt.Sprintf(", unblank: %v", p.BlankErr)
 	}
@@ -410,6 +413,17 @@ func (p *Panel) drawTurned(vx, vy int, pix []byte, stride, scale, x0, y0, x1, y1
 		if phx++; phx == scale {
 			phx, sx = 0, sx+1
 		}
+	}
+}
+
+// toPanelOrder turns the back buffer from the RGBA everything draws into the order the framebuffer reports.
+func (p *Panel) toPanelOrder() {
+	if p.surf != nil || p.var_.Red.Offset != 16 {
+		return
+	}
+	buf := p.mem[p.back : p.back+p.fbH*p.stride]
+	for i := 0; i+4 <= len(buf); i += 4 {
+		buf[i], buf[i+2] = buf[i+2], buf[i]
 	}
 }
 

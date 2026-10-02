@@ -5,6 +5,7 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
+	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/reveal"
 	uitheme "github.com/ygelfand/echolocal/internal/ui/theme"
@@ -13,10 +14,12 @@ import (
 // How the boot screen is laid out, as fractions so it holds on any panel.
 const (
 	logoShare  = 0.42
-	rowShare   = 0.16
+	rowShare   = 0.11
 	nameShare  = 0.42
 	doingShare = 0.30
 	dotShare   = 0.22
+	skipShare  = 0.09
+	padShare   = 0.048
 )
 
 // drawBoot leaves the mark's half clear for the reveal under it, and lists what the device is still
@@ -33,6 +36,37 @@ func drawBoot(p *display.Panel, t uitheme.Theme, progress []component.Progress) 
 		return
 	}
 	rows(s, list, t, progress)
+	if !settled(progress) {
+		drawSkip(s, t)
+	}
+}
+
+func settled(progress []component.Progress) bool {
+	for _, p := range progress {
+		if !p.Settled() {
+			return false
+		}
+	}
+	return true
+}
+
+func skipBox(w, h int) ui.Rect {
+	short := min(w, h)
+	high := int(float64(short) * skipShare)
+	wide := high * 3
+	pad := int(float64(short) * padShare)
+	logo, _ := reveal.Split(w, h)
+	return ui.Rect{X: logo.X + (logo.W-wide)/2, Y: logo.Y + logo.H - high - pad, W: wide, H: high}
+}
+
+func drawSkip(s ui.Surface, t uitheme.Theme) {
+	w, h := s.Size()
+	at := skipBox(w, h)
+	ui.FillRounded(s, at, at.H/2, t.Surface)
+	font := ui.MustLoad(ui.Medium, at.H*2/5)
+	label := say.T("boot.skip")
+	tw, th := font.Measure(label)
+	ui.DrawText(s, font, at.X+(at.W-tw)/2, at.Y+(at.H-th)/2, t.Text, t.Surface, label)
 }
 
 func bounds(p *display.Panel) image.Rectangle { return image.Rect(0, 0, p.Width, p.Height) }
@@ -60,17 +94,24 @@ func box(r image.Rectangle) ui.Rect {
 // rows draws the list, each name with what it is waiting for under it.
 func rows(s ui.Surface, in ui.Rect, t uitheme.Theme, progress []component.Progress) {
 	row := int(float64(min(in.W, in.H)) * rowShare)
+	cols := 1
+	if len(progress)*row > in.H {
+		cols = 2
+	}
+	per := (len(progress) + cols - 1) / cols
+	row = min(row, in.H/per)
+	colW := in.W / cols
 
 	name := ui.MustLoad(ui.Medium, int(float64(row)*nameShare))
 	doing := ui.MustLoad(ui.Regular, int(float64(row)*doingShare))
 
 	dot := int(float64(row) * dotShare)
-	left := in.X + row/2
-	top := in.Y + (in.H-len(progress)*row)/2
+	top := in.Y + (in.H-per*row)/2
 	gap := row / 12
 
 	for i, at := range progress {
-		y := top + i*row
+		left := in.X + (i/per)*colW + row/2
+		y := top + (i%per)*row
 
 		mark := t.Muted
 		switch {

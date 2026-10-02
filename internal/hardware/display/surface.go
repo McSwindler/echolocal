@@ -1,37 +1,122 @@
 package display
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/ygelfand/echolocal/internal/layout"
 	"github.com/ygelfand/echolocal/internal/lib/surface"
 )
 
 const (
-	uiLayer   = 1
-	reconnect = 30 * time.Second
+	uiLayer     = 1
+	reconnect   = 3 * time.Second
+	redialEvery = time.Second
+	strandEvery = time.Second
 )
 
 const helperWait = 60 * time.Second
 
-// open is the helper's layer when it answers, and the framebuffer otherwise.
-func (d *Driver) open() (*Panel, error) {
-	if _, err := os.Stat(surface.Socket); err == nil {
-		p, err := OpenSurface(surface.Socket, helperWait)
-		if err == nil {
-			return p, nil
+// open is the helper's layer on a board that carries the helper, and the framebuffer on one that does not.
+func (d *Driver) open(ctx context.Context) (*Panel, error) {
+	if _, err := os.Stat(layout.Surface); err != nil {
+		p, err := Open(d.path)
+		if err != nil {
+			return nil, fmt.Errorf("display: %s: %w", d.path, err)
 		}
-		slog.Error("the SurfaceFlinger helper would not answer, drawing on the framebuffer", "err", err)
+		return p, nil
+	}
+
+	d.mu.Lock()
+	wait := helperWait
+	if d.opened {
+		wait = 0
+	}
+	d.mu.Unlock()
+
+	p, err := OpenSurface(surface.Socket, wait)
+	var stop func()
+	for err != nil {
+		if stop == nil {
+			slog.Error("display: the helper is not answering", "err", err)
+			stop = d.strand()
+		}
+		select {
+		case <-ctx.Done():
+			stop()
+			return nil, ctx.Err()
+		case <-time.After(redialEvery):
+		}
+		p, err = OpenSurface(surface.Socket, 0)
+	}
+	if stop != nil {
+		stop()
+		slog.Info("display: helper back")
+	}
+	d.mu.Lock()
+	d.opened = true
+	d.mu.Unlock()
+	return p, nil
+}
+
+// Stranded is what to show while the helper is gone.
+func (d *Driver) Stranded(draw func(*Panel) error) {
+	d.mu.Lock()
+	d.stranded = draw
+	d.mu.Unlock()
+}
+
+func (d *Driver) strand() (stop func()) {
+	d.mu.Lock()
+	draw, rot, brightness := d.stranded, d.rot, d.brightness
+	d.mu.Unlock()
+	if draw == nil {
+		return func() {}
 	}
 
 	p, err := Open(d.path)
 	if err != nil {
-		return nil, fmt.Errorf("display: %s: %w", d.path, err)
+		slog.Error("display: no framebuffer for the stranded screen", "err", err)
+		return func() {}
 	}
-	return p, nil
+	p.Turn(rot)
+	if err := SetBacklight(brightness); err != nil {
+		slog.Error("backlight", "err", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		t := time.NewTicker(strandEvery)
+		defer t.Stop()
+		failed := false
+		for {
+			err := draw(p)
+			if err == nil {
+				p.toPanelOrder()
+				err = p.Flip()
+			}
+			if err != nil && !failed {
+				slog.Error("display: showing the stranded screen", "err", err)
+				failed = true
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	})
+	return func() {
+		cancel()
+		wg.Wait()
+		p.Close()
+	}
 }
 
 func OpenSurface(sock string, wait time.Duration) (*Panel, error) {
@@ -66,6 +151,7 @@ func (p *Panel) attach(c *surface.Client) error {
 		return fmt.Errorf("display: the UI layer: %w", err)
 	}
 	p.surf, p.layer = c, l
+	c.Dropped.Listen(p.Dropped.Emit)
 	p.fbW, p.fbH = w, h
 	p.stride = l.Stride
 	p.mem = l.Pixels

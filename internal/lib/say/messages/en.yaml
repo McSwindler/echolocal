@@ -13,6 +13,9 @@ onboard.title: Add me to Home Assistant
 # What it says instead when there is no network to be added over.
 onboard.network: Finish the installer, or run echolocal wifi
 
+boot.skip: Skip
+boot.stranded: Lost contact with the screen
+
 # The side of the picture the drawer is pulled in from.
 edge.left: Left
 edge.right: Right
