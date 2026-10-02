@@ -75,9 +75,7 @@ func visualPage() *shell.Page {
 
 func visualPicker(title string, none func(), chosen func() string, pick func(visual.Kind)) *shell.Page {
 	return &shell.Page{
-		Title:     title,
-		AcrossFor: func(w, h int) int { return 6 },
-		Screened:  true,
+		Title: title,
 		Tiles: func() ([]widget.Cell, []func(int)) {
 			now := ""
 			if chosen != nil {

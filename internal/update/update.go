@@ -22,6 +22,11 @@ var (
 	prev = layout.PrevBinary
 	old  = layout.OldBinary
 
+	binary     = layout.Binary
+	aside      = layout.AsideBinary
+	systemOld  = layout.SystemOldBinary
+	systemPrev = layout.SystemPrevBinary
+
 	mount = mountHolding(layout.Binary)
 
 	// writable is the remount, kept as a variable so a test can run everything around it somewhere it
@@ -87,8 +92,10 @@ func Wanted() <-chan string { return wanted }
 func Remount(rw bool) error { return writable(rw) }
 
 // OnTrial reports whether an update is waiting to be believed.
-func OnTrial() bool {
-	_, err := os.Stat(prev)
+func OnTrial() bool { return exists(prev) || exists(systemPrev) }
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
 	return err == nil
 }
 
@@ -132,24 +139,62 @@ func Commit() {
 		return
 	}
 
-	if err := writable(true); err != nil {
-		slog.Error("remounting to keep an update failed", "err", err)
-		return
-	}
-	defer func() {
-		if err := writable(false); err != nil {
-			slog.Error("remounting read-only failed", "err", err)
-		}
-	}()
-
-	if err := os.Rename(prev, old); err != nil {
-		slog.Error("keeping an update failed", "from", prev, "to", old, "err", err)
+	if err := keep(); err != nil {
+		slog.Error("keeping an update failed", "err", err)
 		return
 	}
 	if err := prop.Set(layout.TrialProp, ""); err != nil {
 		slog.Error("clearing the trial property failed", "err", err)
 	}
 	slog.Info("update kept", "previous", old)
+	tidy()
+}
+
+func keep() error {
+	if exists(prev) {
+		return os.Rename(prev, old)
+	}
+	if err := copyTo(systemPrev, old); err != nil {
+		return err
+	}
+	return onSystem(func() error { return os.Remove(systemPrev) })
+}
+
+// tidy clears /system of everything but the binary.
+func tidy() {
+	var stale []string
+	for _, p := range []string{systemOld, aside} {
+		if exists(p) {
+			stale = append(stale, p)
+		}
+	}
+	if len(stale) == 0 {
+		return
+	}
+	err := onSystem(func() error {
+		for _, p := range stale {
+			if err := os.Remove(p); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		slog.Error("clearing old binaries off /system failed", "err", err)
+		return
+	}
+	slog.Info("cleared old binaries off /system", "removed", stale)
+}
+
+func onSystem(do func() error) error {
+	if err := writable(true); err != nil {
+		return err
+	}
+	err := do()
+	if back := writable(false); back != nil {
+		slog.Error("remounting read-only failed", "err", back)
+	}
+	return err
 }
 
 // RolledBack is what the boot hook left behind if it had to put the previous binary back, and clearing

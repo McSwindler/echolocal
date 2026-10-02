@@ -2,16 +2,12 @@
 package echod
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/ygelfand/echolocal/internal/layout"
 )
-
-var cfgFile string
 
 func newRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -24,33 +20,10 @@ func newRoot() *cobra.Command {
 		Version:      layout.VersionString(),
 	}
 
-	root.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default /system/etc/echolocal/echod.yaml)")
-	cobra.OnInitialize(initConfig)
-
 	root.AddCommand(newRunCmd())
 	root.AddCommand(newToolsCmd())
 	root.AddCommand(newCtlCmd())
 	return root
-}
-
-func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.SetConfigName("echod")
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath("/system/etc/echolocal")
-		viper.AddConfigPath(".")
-	}
-	viper.SetEnvPrefix("ECHOD")
-	viper.AutomaticEnv()
-
-	// A missing config is normal; anything else is worth knowing about.
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Fprintln(os.Stderr, "config:", err)
-		}
-	}
 }
 
 func Execute() {

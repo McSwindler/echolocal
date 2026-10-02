@@ -25,17 +25,23 @@ var Rollback = fmt.Sprintf(`#!/system/bin/sh
 #
 # It also puts back the binary an update replaced. echod renames %[1]s away once it has run long enough
 # to be believed, so finding one here means a boot happened while an update was still on trial.
+PREV=
 if [ -f %[1]s ]; then
+    PREV=%[1]s
+elif [ -f %[5]s ]; then
+    PREV=%[5]s
+fi
+if [ -n "$PREV" ]; then
     WAS=$(cat %[3]s 2>/dev/null)
     log -t echolocal "rolling back to the previous echod: an update did not settle (${WAS:-unknown})"
     mount -o remount,rw /system
-    mv -f %[1]s %[2]s
+    cat "$PREV" > %[2]s && rm -f "$PREV"
     mount -o remount,ro /system
     rm -f %[3]s
     setprop %[4]s "${WAS:-1}"
 fi
 exit 0
-`, layout.PrevBinary, layout.Binary, layout.UpdatingPath, layout.RolledBackProp)
+`, layout.PrevBinary, layout.Binary, layout.UpdatingPath, layout.RolledBackProp, layout.SystemPrevBinary)
 
 // Stub is the boot hook for the script that runs at the end of the boot, which has nothing to do.
 var Stub = `#!/system/bin/sh

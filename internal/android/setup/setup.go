@@ -19,6 +19,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/android/firewall"
 	"github.com/ygelfand/echolocal/internal/android/prop"
 	"github.com/ygelfand/echolocal/internal/component"
+	"github.com/ygelfand/echolocal/internal/layout"
 )
 
 // pinControl dumps and drives every pin on the SoC. It is how the vendor audio HAL reaches the
@@ -91,6 +92,21 @@ var Actions = []Action{
 		// carrying /etc/ssl/certs/ca-certificates.crt keeps every root it already had.
 		Do: func() error { return os.Setenv("SSL_CERT_DIR", certDirs) },
 	},
+	{
+		Name:   "give temporary files a directory",
+		Reason: "there is no /tmp, and go-glyph writes its fonts there",
+		Do:     temp,
+	},
+}
+
+func temp() error {
+	if err := os.RemoveAll(layout.TempDir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(layout.TempDir, 0o700); err != nil {
+		return err
+	}
+	return os.Setenv("TMPDIR", layout.TempDir)
 }
 
 // certDirs are the directories a GOOS=android build would have scanned: the platform's roots, and any

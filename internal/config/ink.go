@@ -1,9 +1,6 @@
 package config
 
-import (
-	"github.com/ygelfand/echolocal/internal/lib/say"
-	"github.com/ygelfand/echolocal/internal/ui/theme"
-)
+import "github.com/ygelfand/echolocal/internal/ui/theme"
 
 // Ink is the colour the clock is drawn in, over whatever theme the device is in.
 type Ink string

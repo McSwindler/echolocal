@@ -10,6 +10,7 @@ var Cronos = Board{
 	DefaultName:   "Echo Show 5",
 	Caps:          Panel | Wifi | Shutter | Camera,
 	PanelRotation: 270,
+	UISize:        "compact",
 	Keys:          map[uint16]Key{116: Mute},
 	MuteDir:       "/sys/devices/platform/gpio-privacy",
 

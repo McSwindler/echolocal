@@ -11,18 +11,15 @@ import (
 	"github.com/ygelfand/echolocal/internal/feature/livecam"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
-	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/lib/surface"
 	"github.com/ygelfand/echolocal/internal/ui"
-	"github.com/ygelfand/echolocal/internal/ui/theme"
-	"github.com/ygelfand/echolocal/internal/ui/widget"
 )
 
 const (
 	camIdle  = 750 * time.Millisecond
 	camHold  = 5 * time.Second
 	camLayer = 900
-	camZ     = 1
+	camZ     = 6
 )
 
 var cam struct {
@@ -219,17 +216,4 @@ func camFit(w, h int, box ui.Rect) ui.Rect {
 		dw, dh = box.H*w/max(1, h), box.H
 	}
 	return ui.Rect{X: box.X + (box.W-dw)/2, Y: box.Y + (box.H-dh)/2, W: dw, H: dh}
-}
-
-func camTap(int, int) bool { return false }
-
-func camAside(s ui.Surface, box ui.Rect, palette theme.Theme, m widget.Metrics) {
-	sz := livecam.Sizes()[camStream()]
-	at := camFit(sz.Width, sz.Height, box)
-	if camWant(box) {
-		ui.FillRounded(s, at, 0, theme.Color{})
-		return
-	}
-	ui.FillRounded(s, at, m.Pad, palette.Surface)
-	ui.DrawTextIn(s, m.Value, at, palette.Muted, palette.Surface, say.T("camera.starting"))
 }

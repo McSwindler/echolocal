@@ -15,6 +15,8 @@ const z = -1
 
 var ids atomic.Uint32
 
+var ErrNoHelper = errors.New("gpu: the display helper is not connected")
+
 type Layer struct {
 	c    *surface.Client
 	id   uint32
@@ -23,11 +25,14 @@ type Layer struct {
 
 func Open(w, h int) (*Layer, error) {
 	c := display.Get().Helper()
-	if c == nil {
-		return nil, errors.New("gpu: the display helper is not connected")
+	if c == nil || c.Err() != nil {
+		return nil, ErrNoHelper
 	}
 	id := 2000 + ids.Add(1)
 	if err := c.GLOpen(id, w, h, z); err != nil {
+		if c.Err() != nil {
+			return nil, ErrNoHelper
+		}
 		return nil, err
 	}
 	return &Layer{c: c, id: id, W: w, H: h}, nil
@@ -35,11 +40,14 @@ func Open(w, h int) (*Layer, error) {
 
 func OpenOffscreen(w, h int) (*Layer, error) {
 	c := display.Get().Helper()
-	if c == nil {
-		return nil, errors.New("gpu: the display helper is not connected")
+	if c == nil || c.Err() != nil {
+		return nil, ErrNoHelper
 	}
 	id := 2000 + ids.Add(1)
 	if err := c.GLOffscreen(id, w, h); err != nil {
+		if c.Err() != nil {
+			return nil, ErrNoHelper
+		}
 		return nil, err
 	}
 	return &Layer{c: c, id: id, W: w, H: h}, nil
@@ -57,7 +65,7 @@ func (l *Layer) Read() (*image.RGBA, error) {
 	return img, nil
 }
 
-func (l *Layer) Alive() bool { return display.Get().Helper() == l.c }
+func (l *Layer) Alive() bool { return display.Get().Helper() == l.c && l.c.Err() == nil }
 
 func (l *Layer) Texture(unit int, img *image.RGBA) error {
 	b := img.Bounds()

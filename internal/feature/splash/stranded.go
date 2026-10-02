@@ -3,7 +3,6 @@ package splash
 import (
 	"golang.org/x/exp/shiny/materialdesign/icons"
 
-	"github.com/ygelfand/echolocal/internal/feature/theme"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -20,7 +19,7 @@ func init() { display.Get().Stranded(drawStranded) }
 func drawStranded(p *display.Panel) error {
 	s := ui.Of(p)
 	w, h := s.Size()
-	t := theme.Get().Current()
+	t := chosen()
 	ui.Fill(s, t.Background)
 
 	short := min(w, h)

@@ -110,8 +110,8 @@ build-surface: ## Build the SurfaceFlinger helper with the NDK (SURFACE_API=25 f
 		up=$$(echo $$lib | tr a-z A-Z); \
 		$(NDK_CC) -shared -DLIB$$up -Wl,-soname,lib$$lib.so -o $(SURFACE_STUBS)/lib$$lib.so $(SURFACE_SRC)/stubs.c || exit 1; \
 	done
-	$(NDK_CC) -O2 -Wall -Werror -o $(SURFACE_BIN) $(SURFACE_SRC)/surface.c $(SURFACE_SRC)/video.c $(SURFACE_SRC)/gl.c $(SURFACE_SRC)/drm.c $(SURFACE_SRC)/audio.c $(SURFACE_SRC)/wire.c \
-		-L$(SURFACE_STUBS) -lgui -lutils -lbinder -landroid -lmediandk -lEGL -lGLESv2 -llog -Wl,--allow-shlib-undefined
+	$(NDK_CC) -O2 -Wall -Werror -o $(SURFACE_BIN) $(SURFACE_SRC)/surface.c $(SURFACE_SRC)/video.c $(SURFACE_SRC)/gl.c $(SURFACE_SRC)/ui.c $(SURFACE_SRC)/drm.c $(SURFACE_SRC)/audio.c $(SURFACE_SRC)/wire.c \
+		-L$(SURFACE_STUBS) -lgui -lutils -lbinder -landroid -lmediandk -lEGL -lGLESv2 -llog -lm -Wl,--allow-shlib-undefined
 
 .PHONY: build-camshim
 build-camshim: ## Build the camera service preload with the NDK
@@ -246,7 +246,7 @@ install-echod: ## Install echod into /system/app/echod, built for whatever board
 		bin=$(BUILD_DIR)/echod$${board:+-$$board}-$(DOT_ARCH); \
 		$(ADB) shell "setprop ctl.stop $$service; sleep 1"; \
 		$(ADB) remount >/dev/null; \
-		$(ADB) shell 'mkdir -p $(ECHOD_DIR) && rm -f $(ECHOD_DIR)/echod.prev $(ECHOD_DIR)/echod.old'; \
+		$(ADB) shell 'mkdir -p $(ECHOD_DIR) && rm -f $(ECHOD_DIR)/echod.prev $(ECHOD_DIR)/echod.old $(ECHOD_DIR)/echod.aside $(STATE_DIR)/echod.prev $(STATE_DIR)/echod.old'; \
 		$(ADB) push "$$bin" $(ECHOD_DIR)/echod >/dev/null; \
 		$(ADB) shell "chmod 755 $(ECHOD_DIR)/echod; \
 			rm -f $(STATE_DIR)/updating; setprop echolocal.trial ''; setprop echolocal.rolledback ''; \

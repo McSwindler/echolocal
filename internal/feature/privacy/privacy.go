@@ -12,10 +12,8 @@ import (
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/mute"
-	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/hardware/buttons"
-	"github.com/ygelfand/echolocal/internal/hardware/display"
-	"github.com/ygelfand/echolocal/internal/ui"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 )
 
 func init() {
@@ -24,12 +22,13 @@ func init() {
 }
 
 type Privacy struct {
+	Changed hook.Hook[Marks]
+
 	camera *esphome.BinarySensor
 	sw     *esphome.Switch
 
 	mu    sync.Mutex
 	marks Marks
-	claim *display.Claim
 }
 
 var (
@@ -88,7 +87,6 @@ func (p *Privacy) SetMarks(on bool) {
 	}
 	p.sw.Set(on)
 	p.show()
-	shell.Get().Redraw()
 }
 
 // Start reads where both controls already are. Neither says anything until it is next touched.
@@ -109,7 +107,7 @@ func (p *Privacy) covered(on bool) {
 	p.camera.Set(on)
 
 	p.mu.Lock()
-	p.marks.CameraCovered = on
+	p.marks.CameraBlocked = on
 	p.mu.Unlock()
 
 	p.show()
@@ -123,26 +121,14 @@ func (p *Privacy) muted(on bool) {
 	p.show()
 }
 
-// show puts the marks on the panel, or takes them off.
-func (p *Privacy) show() {
+// Current is the marks to show, none while they are turned off.
+func (p *Privacy) Current() Marks {
+	if !config.Get().Screen.Marks {
+		return Marks{}
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	if !config.Get().Screen.Marks || !p.marks.Showing() {
-		if p.claim != nil {
-			p.claim.Release()
-			p.claim = nil
-		}
-		return
-	}
-
-	if p.claim == nil {
-		p.claim = display.Get().Overlay(display.PriorityAlert)
-	}
-
-	marks := p.marks
-	p.claim.Show(func(panel *display.Panel) error {
-		Draw(ui.Of(panel), marks)
-		return nil
-	})
+	return p.marks
 }
+
+func (p *Privacy) show() { p.Changed.Emit(p.Current()) }

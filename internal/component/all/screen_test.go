@@ -19,12 +19,21 @@ var screenOnly = []string{
 	"github.com/ygelfand/echolocal/internal/ui/reveal",
 	"github.com/ygelfand/echolocal/internal/feature/brightness",
 	"github.com/ygelfand/echolocal/internal/hardware/alsps",
+	"github.com/ygelfand/echolocal/internal/feature/gui",
+	"github.com/ygelfand/echolocal/internal/feature/screen",
+	"github.com/ygelfand/echolocal/internal/feature/dashboard",
+	"github.com/ygelfand/echolocal/internal/feature/web",
+	"github.com/ygelfand/echolocal/internal/feature/poster",
+	"github.com/ygelfand/echolocal/internal/feature/message",
+	"github.com/ygelfand/echolocal/internal/feature/assistant",
+	"github.com/ygelfand/echolocal/internal/feature/videoplayer",
+	"github.com/ygelfand/echolocal/pkg/gogui",
+	"github.com/go-gui-org/go-gui/gui",
 }
 
 var castOnly = []string{
 	"github.com/ygelfand/echolocal/internal/feature/chromecast",
 	"github.com/ygelfand/echolocal/internal/hardware/video",
-	"github.com/ygelfand/echolocal/internal/feature/videoplayer",
 	"github.com/ygelfand/echolocal/internal/lib/webm",
 	"github.com/ygelfand/echolocal/internal/lib/hls",
 	"github.com/ygelfand/echolocal/internal/lib/cenc",

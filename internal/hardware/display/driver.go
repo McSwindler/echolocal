@@ -17,6 +17,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/layout"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/service"
 )
 
@@ -82,6 +83,8 @@ type Driver struct {
 	opened   bool
 	stranded func(*Panel) error
 	dropped  error
+
+	Released hook.Hook[Priority]
 
 	// info is what the panel says about itself, kept here because the boot screen asks for it
 	// while the render goroutine is drawing, and the panel's own geometry is what drawing reads.
@@ -673,6 +676,19 @@ func (c *Claim) Release() {
 	d.mu.Unlock()
 
 	d.wake()
+	d.Released.Emit(c.priority)
+}
+
+// Held reports whether any claim at a priority is still up.
+func (d *Driver) Held(p Priority) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range d.claims {
+		if c.priority == p {
+			return true
+		}
+	}
+	return false
 }
 
 // topmost is the claim that gets the panel: the highest priority with something to draw, and the
@@ -811,8 +827,19 @@ func (d *Driver) render() error {
 	}
 
 	stack, clear := d.stack()
-	if panel == nil || len(stack) == 0 {
+	if panel == nil {
 		return nil
+	}
+	if len(stack) == 0 {
+		d.mu.Lock()
+		forced := d.forced
+		d.forced = false
+		d.mu.Unlock()
+		if !forced {
+			return nil
+		}
+		panel.ClearRect(0, 0, panel.Width, panel.Height)
+		return panel.Flip()
 	}
 
 	// Here rather than where the device was noticed turning: this is the only goroutine that

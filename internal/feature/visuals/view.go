@@ -1,6 +1,7 @@
 package visuals
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -11,7 +12,6 @@ import (
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/gpu"
 	"github.com/ygelfand/echolocal/internal/ui"
-	"github.com/ygelfand/echolocal/internal/ui/theme"
 	"github.com/ygelfand/echolocal/internal/ui/visual"
 )
 
@@ -41,15 +41,10 @@ func (v *Visuals) View() *View { return &View{v: v} }
 
 func (w *View) Covers() bool { return true }
 
-func (w *View) Tap(int, int) bool { return false }
-
 func (w *View) Timeout() time.Duration { return shell.SettingsTimeout }
 
-func (w *View) Draw(s ui.Surface, _ theme.Theme) {
-	width, height := s.Size()
+func (w *View) Keep(width, height int) {
 	area := ui.Rect{W: width, H: height}
-	ui.Clear(s, area)
-
 	kind := w.v.Kind()
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -65,6 +60,9 @@ func (w *View) Draw(s ui.Surface, _ theme.Theme) {
 	}
 	if w.layer == nil {
 		l, err := gpu.Open(area.W, area.H)
+		if errors.Is(err, gpu.ErrNoHelper) {
+			return
+		}
 		if err != nil {
 			slog.Error("visuals: opening the GPU layer", "err", err)
 			w.broken = true
@@ -74,8 +72,10 @@ func (w *View) Draw(s ui.Surface, _ theme.Theme) {
 	}
 	if rot := display.Get().Orientation(); w.area != area || w.rot != rot {
 		if err := w.layer.Place(area); err != nil {
-			slog.Error("visuals: placing the GPU layer", "err", err)
-			w.broken = true
+			if w.layer.Alive() {
+				slog.Error("visuals: placing the GPU layer", "err", err)
+				w.broken = true
+			}
 			w.close()
 			return
 		}
@@ -86,16 +86,6 @@ func (w *View) Draw(s ui.Surface, _ theme.Theme) {
 		w.began, w.frames, w.spent, w.slowest = time.Now(), 0, 0, 0
 		go w.run()
 	}
-}
-
-func (w *View) showing() bool {
-	stack := shell.Get().Stack()
-	for i := len(stack) - 1; i >= 0; i-- {
-		if stack[i].View.Covers() {
-			return stack[i].View == shell.View(w)
-		}
-	}
-	return false
 }
 
 func (w *View) close() {
@@ -113,7 +103,7 @@ func (w *View) run() {
 	defer t.Stop()
 	var shaded, last time.Time
 	for now := range t.C {
-		if !w.showing() {
+		if !shell.Get().Visible(w) {
 			break
 		}
 		if fps := config.Get().Visual.MaxFPS; fps > 0 && now.Sub(shaded) < time.Second/time.Duration(fps)-2*time.Millisecond {
@@ -142,8 +132,10 @@ func (w *View) shade(now, last time.Time) {
 	}
 	start := time.Now()
 	if err := w.vis.Shade(w.layer, w.fresh, w.area, x); err != nil {
-		slog.Error("visuals: GPU visual failed", "kind", string(w.kind), "err", err)
-		w.broken = true
+		if w.layer.Alive() {
+			slog.Error("visuals: GPU visual failed", "kind", string(w.kind), "err", err)
+			w.broken = true
+		}
 		w.close()
 		return
 	}

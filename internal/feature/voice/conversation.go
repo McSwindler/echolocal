@@ -167,6 +167,9 @@ type conversation struct {
 	grace   *time.Timer
 
 	reply reply
+
+	said   string
+	answer string
 }
 
 // graceStart is how long to wait for a stopped run to close before starting the next one anyway.
@@ -334,6 +337,8 @@ func (c *conversation) handle(e event) {
 		if e.text != "" {
 			slog.Info("heard", "slot", c.slot+1, "text", e.text)
 			c.log.Heard(e.text)
+			c.said = e.text
+			c.show()
 		}
 		c.turn.Heard(e.text)
 		if c.phase == phaseListening {
@@ -343,6 +348,8 @@ func (c *conversation) handle(e event) {
 	case evReplyText:
 		slog.Info("replying", "slot", c.slot+1, "text", e.text)
 		c.log.Replied(e.text)
+		c.answer = e.text
+		c.show()
 		c.turn.Replying(e.text)
 		if c.phase == phaseListening {
 			c.think()
@@ -555,6 +562,7 @@ func (c *conversation) start(n nextTurn) {
 	recording.Get().Opens(c.turn.ID(), slot)
 	c.send("start", func() error { return c.vs.StartTurn(phrase, audioSettings()) })
 
+	c.said, c.answer = "", ""
 	c.enter(phaseListening)
 	c.turn.Listening()
 	c.reply = reply{}
@@ -679,6 +687,17 @@ func (c *conversation) enter(p phase) {
 	c.phase = p
 	c.visible.Store(int32(p))
 	mic.Get().SetAdapting(p != phaseListening)
+	c.show()
+}
+
+// show hands the whole turn to whatever is drawing it.
+func (c *conversation) show() {
+	Shown.Emit(Showing{
+		Phase: shown(c.phase),
+		Slot:  c.slot,
+		Said:  c.said,
+		Reply: c.answer,
+	})
 }
 
 // startPending opens the turn that was held back, if there is one.

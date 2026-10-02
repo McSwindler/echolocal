@@ -1,10 +1,6 @@
 package config
 
-import (
-	"time"
-
-	"github.com/ygelfand/echolocal/internal/lib/say"
-)
+import "time"
 
 // Idle is what the screen settles into when nobody has touched it for a while.
 type Idle struct {

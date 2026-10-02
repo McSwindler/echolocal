@@ -24,6 +24,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/led"
 	"github.com/ygelfand/echolocal/internal/hardware/speaker"
+	"github.com/ygelfand/echolocal/internal/lib/hook"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
 )
 
@@ -53,6 +54,9 @@ var (
 
 // Timers is every timer Home Assistant has told this device about.
 type Timers struct {
+	// Changed carries the card a screen shows for the soonest timer.
+	Changed hook.Hook[Card]
+
 	countdown *led.Claim
 	alarm     *led.Claim
 
@@ -66,6 +70,7 @@ type Timers struct {
 	held  map[string]*timer
 	stop  context.CancelFunc
 	shown []led.Color
+	said  string
 }
 
 // timer is one of them. left is what was last known and at is when that was true, so a running timer
@@ -269,6 +274,7 @@ func (t *Timers) ring(ctx context.Context) {
 		t.mu.Unlock()
 		t.show()
 	}()
+	t.show()
 
 	t.alarm.Play(led.EffectPulse, alarmColor)
 	defer t.alarm.Clear()
@@ -297,6 +303,16 @@ func (t *Timers) ring(ctx context.Context) {
 // show draws the soonest timer, or clears the ring when there is none. It sends nothing when the
 // frame has not moved, so the driver is not woken four times a second for a timer with an hour to go.
 func (t *Timers) show() {
+	t.mu.Lock()
+	card := t.now()
+	key := card.key()
+	changed := key != t.said
+	t.said = key
+	t.mu.Unlock()
+	if changed {
+		t.Changed.Emit(card)
+	}
+
 	// A countdown drawn as an arc needs somewhere to draw it. The timers themselves run and ring on
 	// a board with no ring; only the picture of one is missing.
 	if !t.countdown.Present() {
@@ -321,6 +337,24 @@ func (t *Timers) show() {
 		return
 	}
 	t.countdown.Paint(next)
+}
+
+// Now is the card for the soonest timer, or for one that is ringing.
+func (t *Timers) Now() Card {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.now()
+}
+
+func (t *Timers) now() Card {
+	now := time.Now()
+	card := Card{Ringing: t.stop != nil}
+	if soon := t.soonest(now); soon != nil {
+		card.Name, card.Left, card.Of = soon.name, soon.remaining(now), soon.total
+		card.Showing = true
+	}
+	card.Showing = card.Showing || card.Ringing
+	return card
 }
 
 // soonest is the running timer with the least left. A paused one is shown as nothing rather than as a

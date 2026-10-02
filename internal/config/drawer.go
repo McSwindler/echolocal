@@ -1,7 +1,5 @@
 package config
 
-import "github.com/ygelfand/echolocal/internal/lib/say"
-
 // Edge is a side of the picture, not of the panel: the device gets stood in different places and
 // turned, and a right-handed reach is not a left-handed one.
 type Edge string

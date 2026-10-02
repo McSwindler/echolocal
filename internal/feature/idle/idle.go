@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	gogui "github.com/go-gui-org/go-gui/gui"
 	esphome "github.com/ygelfand/go-esphome-device"
-	"golang.org/x/exp/shiny/materialdesign/icons"
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
@@ -16,10 +16,11 @@ import (
 	"github.com/ygelfand/echolocal/internal/feature/drawer"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/feature/timesync"
+	"github.com/ygelfand/echolocal/internal/feature/videoplayer"
+	"github.com/ygelfand/echolocal/internal/feature/web"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/touch"
 	"github.com/ygelfand/echolocal/internal/lib/say"
-	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/visual"
 )
 
@@ -51,7 +52,7 @@ func Get() *Idle {
 		drawer.Get().Add(drawer.Entry{
 			Name:  func() string { return say.T("rail.sleep") },
 			Order: drawer.OrderIdle,
-			Icon:  func() ui.Icon { return icons.ImageBrightness3 },
+			Glyph: func() string { return gogui.IconMoon },
 			Open:  shared.Lock,
 		})
 	})
@@ -66,6 +67,8 @@ func (i *Idle) Lock() {
 }
 
 func (i *Idle) Name() string { return "idle" }
+
+func (i *Idle) View() *View { return i.view }
 
 func (i *Idle) Entities() []esphome.Entity {
 	return []esphome.Entity{
@@ -125,11 +128,17 @@ func (i *Idle) covered() {
 
 func due(after, since time.Duration) bool { return after > 0 && since > after }
 
-func quiet() time.Duration { return touch.Get().Since() }
+func quiet() time.Duration {
+	since := touch.Get().Since()
+	if w := videoplayer.Watched(); !w.IsZero() {
+		since = min(since, time.Since(w))
+	}
+	return since
+}
 
 func free() bool {
 	d := display.Get()
-	return !shell.Get().Open() && d.Uncovered(display.PriorityDashboard)
+	return !shell.Get().Open() && d.Uncovered(display.PriorityDashboard) && web.Get().Offering() == ""
 }
 
 func (i *Idle) Show() {

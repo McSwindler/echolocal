@@ -9,9 +9,7 @@ language.name: English
 
 # The screen a device nobody has added yet holds up, beside the code to scan.
 onboard.title: Add me to Home Assistant
-
-# What it says instead when there is no network to be added over.
-onboard.network: Finish the installer, or run echolocal wifi
+onboard.hint: Scan the code, then choose this address.
 
 boot.skip: Skip
 boot.stranded: Lost contact with the screen
@@ -83,7 +81,6 @@ features.cast: Cast receiver
 features.cast.hint: Cast from a phone or an app
 features.youtube: YouTube
 features.youtube.hint: When something is cast from YouTube
-features.rtsp: Camera stream
 features.rtsp.hint: RTSP on port 8554
 
 youtube.title: YouTube
@@ -107,9 +104,6 @@ skip.music_offtopic: Non-music section
 skip.filler: Tangents or jokes
 
 # The player, on the device itself.
-player.playing: Playing
-player.paused: Paused
-player.idle: Nothing playing
 player.now: Now playing
 player.next: Up next
 player.live: LIVE
@@ -131,6 +125,7 @@ face.analog-seconds: Analog seconds
 face.segments: Segments
 face.words: Words
 face.overlap: Overlap
+face.stack: Stack
 ink.theme: Theme
 ink.amber: Amber
 ink.red: Red
@@ -188,6 +183,24 @@ visual.thunderstorm: Thunderstorm
 visual.fireflies: Fireflies
 visual.matrix: Matrix
 
+screen.setting.backlight: Brightness
+screen.setting.auto: Auto brightness
+screen.setting.theme: Theme
+screen.setting.style: Style
+screen.setting.size: Size
+screen.setting.drawer: Dock location
+
+poster.never: Never
+poster.wake: On each wake
+poster.hourly: Hourly
+poster.daily: Daily
+
+tone.info: Info
+tone.success: Success
+tone.warning: Warning
+tone.alert: Alert
+
+camera.stream: Camera stream
 camera.starting: Starting the camera
 camera.reset: Reset to defaults
 camera.reset.confirm: Tap again to reset

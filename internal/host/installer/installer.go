@@ -243,8 +243,9 @@ func installBinary(r *run) (string, bool, error) {
 // the binary that opened the trial is being overwritten, so the boot hook must not put it back, and
 // echod must not read the restart that follows as a trial that died.
 func clearTrial(r *run) error {
-	_, err := r.d.Shell(fmt.Sprintf("rm -f %s %s %s; setprop %s ''; setprop %s ''",
-		layout.PrevBinary, layout.OldBinary, layout.UpdatingPath,
+	_, err := r.d.Shell(fmt.Sprintf("rm -f %s %s %s %s %s %s; setprop %s ''; setprop %s ''",
+		layout.PrevBinary, layout.OldBinary, layout.SystemPrevBinary, layout.SystemOldBinary,
+		layout.AsideBinary, layout.UpdatingPath,
 		layout.TrialProp, layout.RolledBackProp))
 	return err
 }

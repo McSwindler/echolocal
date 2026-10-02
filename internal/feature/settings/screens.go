@@ -1,16 +1,14 @@
 package settings
 
 import (
-	"log/slog"
 	"strconv"
 
-	"golang.org/x/exp/shiny/materialdesign/icons"
+	gogui "github.com/go-gui-org/go-gui/gui"
 
 	"github.com/ygelfand/echolocal/internal/config"
-	"github.com/ygelfand/echolocal/internal/feature/brightness"
 	"github.com/ygelfand/echolocal/internal/feature/privacy"
+	"github.com/ygelfand/echolocal/internal/feature/screen"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
-	apptheme "github.com/ygelfand/echolocal/internal/feature/theme"
 	"github.com/ygelfand/echolocal/internal/feature/volume"
 	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -24,7 +22,7 @@ func percent(v int) string { return strconv.Itoa(v) + "%" }
 
 type section struct {
 	label string
-	icon  ui.Icon
+	glyph string
 	page  func() *shell.Page
 }
 
@@ -36,21 +34,19 @@ func root() *shell.Page {
 		Title: say.T("settings.title"),
 		Build: func() ([]widget.Row, []func(int)) {
 			rows := []widget.Row{
-				{Label: say.T("settings.display"), Kind: widget.Chevron,
-					Icon: icons.ActionSettingsBrightness, Value: config.Get().Screen.Theme},
-				{Label: say.T("settings.volume"), Kind: widget.Chevron,
-					Icon:  icons.HardwareSpeaker,
+				{Glyph: gogui.IconSunnyO, Label: say.T("settings.display"), Kind: widget.Chevron,
+					Value: config.Get().Screen.Theme},
+				{Glyph: gogui.IconSpeaker, Label: say.T("settings.volume"), Kind: widget.Chevron,
 					Value: percent(volume.Get().Level(config.StreamMain))},
 			}
 			taps := []func(int){open(displayPage()), open(volume.Page())}
 			for _, s := range sections {
-				rows = append(rows, widget.Row{Label: say.T(s.label), Kind: widget.Chevron, Icon: s.icon})
+				rows = append(rows, widget.Row{Glyph: s.glyph, Label: say.T(s.label), Kind: widget.Chevron})
 				taps = append(taps, open(s.page()))
 			}
 			rows = append(rows,
-				widget.Row{Label: say.T("settings.features"), Kind: widget.Chevron,
-					Icon: icons.ActionExtension, Value: featuresOn()},
-				widget.Row{Label: say.T("settings.debug"), Kind: widget.Chevron, Icon: icons.ActionBugReport},
+				widget.Row{Glyph: gogui.IconPlug, Label: say.T("settings.features"), Kind: widget.Chevron, Value: featuresOn()},
+				widget.Row{Glyph: gogui.IconCode, Label: say.T("settings.debug"), Kind: widget.Chevron},
 			)
 			taps = append(taps, open(featuresPage()), open(debugPage()))
 			return rows, taps
@@ -64,25 +60,19 @@ func displayPage() *shell.Page {
 		Title: say.T("settings.display"),
 		Build: func() ([]widget.Row, []func(int)) {
 			cfg := config.Get()
+			auto := cfg.Screen.Mode == config.ModeAuto
 
 			return []widget.Row{
-					{Label: say.T("settings.brightness"), Kind: widget.Slider,
-						Icon: icons.ImageBrightness6, Level: cfg.Screen.Backlight, Value: percent(cfg.Screen.Backlight)},
-					{Label: say.T("settings.brightness.auto"), Kind: widget.Toggle,
-						Icon: icons.DeviceBrightnessAuto, On: cfg.Screen.Mode == config.ModeAuto},
-					{Label: say.T("settings.theme"), Kind: widget.Chevron,
-						Icon: icons.ImagePalette, Value: cfg.Screen.Theme},
-					{Label: say.T("settings.clock"), Kind: widget.Chevron,
-						Icon: icons.DeviceAccessTime, Value: cfg.Clock.Face.Label()},
-					{Label: say.T("settings.idle"), Kind: widget.Chevron,
-						Icon: icons.ImageBrightness3, Value: cfg.Idle.After.Label()},
-					{Label: say.T("settings.drawer"), Kind: widget.Chevron,
-						Icon: icons.NavigationMenu, Value: cfg.Screen.Drawer.Label()},
-					{Label: say.T("settings.marks"), Kind: widget.Toggle,
-						Icon: icons.ActionVisibilityOff, On: cfg.Screen.Marks},
+					{Label: say.T("settings.brightness"), Kind: widget.Slider, Level: cfg.Screen.Backlight},
+					{Label: say.T("settings.brightness.auto"), Kind: widget.Toggle, On: auto},
+					{Glyph: gogui.IconPalette, Label: say.T("settings.theme"), Kind: widget.Chevron, Value: cfg.Screen.Theme},
+					{Glyph: gogui.IconClock, Label: say.T("settings.clock"), Kind: widget.Chevron, Value: cfg.Clock.Face.Label()},
+					{Glyph: gogui.IconMoon, Label: say.T("settings.idle"), Kind: widget.Chevron, Value: cfg.Idle.After.Label()},
+					{Label: say.T("settings.drawer"), Kind: widget.Chevron, Value: cfg.Screen.Drawer.Label()},
+					{Label: say.T("settings.marks"), Kind: widget.Toggle, On: cfg.Screen.Marks},
 				}, []func(int){
-					func(level int) { brightness.Get().SetLevel(level) },
-					func(int) { brightness.Get().SetAuto(cfg.Screen.Mode != config.ModeAuto) },
+					func(level int) { screen.Get().SetBacklight(level) },
+					func(int) { toggleAuto(auto) },
 					open(themePage()),
 					open(clockPage()),
 					open(idlePage()),
@@ -93,22 +83,31 @@ func displayPage() *shell.Page {
 	}
 }
 
+func toggleAuto(auto bool) {
+	want := config.ModeAuto
+	if auto {
+		want = config.ModeManual
+	}
+	screen.Get().SetMode(want)
+}
+
 // themePage is the palette.
 func themePage() *shell.Page {
 	return &shell.Page{
 		Title: say.T("settings.theme"),
 
 		Tiles: func() ([]widget.Cell, []func(int)) {
-			now := config.Get().Screen.Theme
+			now := screen.Get().Theme().Name
 
 			cells := make([]widget.Cell, 0, len(theme.All))
 			acts := make([]func(int), 0, len(theme.All))
 
 			for _, t := range theme.All {
 				cells = append(cells, widget.Cell{
-					Label:  t.Name,
-					Chosen: t.Name == now,
-					Paint:  swatch(t),
+					Label:   t.Name,
+					Chosen:  t.Name == now,
+					Paint:   swatch(t),
+					Palette: &t,
 				})
 				acts = append(acts, use(t.Name))
 			}
@@ -151,7 +150,14 @@ func swatch(t theme.Theme) func(ui.Surface, ui.Rect, theme.Theme) {
 	}
 }
 
-func use(name string) func(int) { return func(int) { apptheme.Get().Choose(name) } }
+func use(name string) func(int) {
+	return func(int) {
+		if err := config.Set().Screen().Theme(name); err != nil {
+			return
+		}
+		screen.Get().Use(name)
+	}
+}
 
 // drawerPage is which side the rail comes in from.
 func drawerPage() *shell.Page {
@@ -166,16 +172,9 @@ func drawerPage() *shell.Page {
 
 			for _, e := range edges {
 				rows = append(rows, widget.Row{Label: e.Label(), Kind: widget.Plain, Chosen: e == now})
-				acts = append(acts, func(int) { setEdge(e) })
+				acts = append(acts, func(int) { screen.Get().SetDrawer(e) })
 			}
 			return rows, acts
 		},
-	}
-}
-
-// setEdge remembers which side the rail comes in from.
-func setEdge(e config.Edge) {
-	if err := config.Set().Screen().Drawer(e); err != nil {
-		slog.Error("saving a setting failed", "setting", "drawer", "err", err)
 	}
 }

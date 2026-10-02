@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/config"
-	"github.com/ygelfand/echolocal/internal/feature/clock"
-	"github.com/ygelfand/echolocal/internal/feature/clock/face"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard/face"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/lib/say"
 	"github.com/ygelfand/echolocal/internal/ui"
@@ -32,9 +32,9 @@ func clockPage() *shell.Page {
 					open(positionPage()),
 					open(sizePage()),
 					open(colorPage()),
-					func(int) { clock.Get().SetDate(!cfg.Clock.Date) },
+					func(int) { dashboard.Get().SetDate(!cfg.Clock.Date) },
 					func(int) { toggleHours(cfg.Screen.Hours) },
-					func(int) { clock.Get().SetLogo(!cfg.Screen.Logo) },
+					func(int) { dashboard.Get().SetLogo(!cfg.Screen.Logo) },
 				}
 		},
 	}
@@ -42,30 +42,30 @@ func clockPage() *shell.Page {
 
 func toggleHours(now config.HourFormat) {
 	if now == config.TwelveHour {
-		clock.Get().SetHours(config.TwentyFourHour)
+		dashboard.Get().SetHours(config.TwentyFourHour)
 		return
 	}
-	clock.Get().SetHours(config.TwelveHour)
+	dashboard.Get().SetHours(config.TwelveHour)
 }
 
 func facePage() *shell.Page {
 	return picker(say.T("clock.face"), config.Faces(),
-		func() config.Face { return config.Get().Clock.Face }, preview, clock.Get().SetFace)
+		func() config.Face { return config.Get().Clock.Face }, preview, dashboard.Get().SetFace)
 }
 
 func positionPage() *shell.Page {
 	return picker(say.T("clock.position.title"), config.Positions(),
-		func() config.Position { return config.Get().Clock.Position }, placing, clock.Get().SetPosition)
+		func() config.Position { return config.Get().Clock.Position }, placing, dashboard.Get().SetPosition)
 }
 
 func sizePage() *shell.Page {
 	return picker(say.T("clock.size.title"), config.Sizes(),
-		func() config.Size { return config.Get().Clock.Size }, sizing, clock.Get().SetSize)
+		func() config.Size { return config.Get().Clock.Size }, sizing, dashboard.Get().SetSize)
 }
 
 func colorPage() *shell.Page {
 	return picker(say.T("clock.color.title"), config.Inks(),
-		func() config.Ink { return config.Get().Clock.Ink }, inking, clock.Get().SetInk)
+		func() config.Ink { return config.Get().Clock.Ink }, inking, dashboard.Get().SetInk)
 }
 
 type drawing = func(ui.Surface, ui.Rect, theme.Theme)
@@ -118,7 +118,7 @@ func sizing(size config.Size) drawing {
 
 func laid(s ui.Surface, box ui.Rect, palette theme.Theme, at config.Position, size config.Size) {
 	cfg := config.Get()
-	within := clock.Box(at, size, box.W, box.H)
+	within := dashboard.Box(at, size, box.W, box.H)
 	within.X += box.X
 	within.Y += box.Y
 	face.Of(cfg.Clock.Face).Draw(s, within, reading(), cfg.Clock.Ink.Over(palette))

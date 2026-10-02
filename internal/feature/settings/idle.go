@@ -2,8 +2,8 @@ package settings
 
 import (
 	"github.com/ygelfand/echolocal/internal/config"
-	"github.com/ygelfand/echolocal/internal/feature/clock"
-	"github.com/ygelfand/echolocal/internal/feature/clock/face"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard/face"
 	"github.com/ygelfand/echolocal/internal/feature/idle"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/lib/say"
@@ -100,7 +100,7 @@ func idlePlaced(change func(*config.Idle)) drawing {
 		if c.Face == config.FaceNone {
 			return
 		}
-		within := clock.Place(c.Position, c.Align, c.Size, box.W, box.H)
+		within := dashboard.Place(c.Position, c.Align, c.Size, box.W, box.H)
 		within.X += box.X
 		within.Y += box.Y
 		face.Of(c.Face).Draw(s, within, reading(), cfg.Clock.Ink.Over(palette))

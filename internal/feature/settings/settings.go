@@ -9,13 +9,12 @@ import (
 	"slices"
 	"sync"
 
-	"golang.org/x/exp/shiny/materialdesign/icons"
+	gogui "github.com/go-gui-org/go-gui/gui"
 
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/feature/drawer"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/lib/say"
-	"github.com/ygelfand/echolocal/internal/ui"
 )
 
 func init() {
@@ -37,7 +36,7 @@ func Get() *Settings {
 		drawer.Get().Add(drawer.Entry{
 			Name:  func() string { return say.T("settings.title") },
 			Order: drawer.OrderSettings,
-			Icon:  func() ui.Icon { return icons.ActionSettings },
+			Glyph: func() string { return gogui.IconGear },
 			Open:  Open,
 		})
 	})

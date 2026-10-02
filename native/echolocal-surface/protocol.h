@@ -2,7 +2,7 @@
 #define SOCKET_PATH "/dev/socket/" SOCKET_NAME
 
 #define MAGIC 0x53564e4c
-#define VERSION 3
+#define VERSION 5
 
 #define OP_HELLO 1
 #define OP_CREATE 2
@@ -33,6 +33,11 @@
 #define OP_AUDIO_SAMPLE 27
 #define OP_AUDIO_CLOSE 28
 #define OP_SCREEN_READ 29
+#define OP_UI_OPEN 30
+#define OP_UI_PROGRAM 31
+#define OP_UI_TEXTURE 32
+#define OP_UI_FRAME 33
+#define OP_UI_READ 34
 
 #define CRYPT_CLEAR 0
 #define CRYPT_CENC 1

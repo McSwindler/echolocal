@@ -13,13 +13,13 @@ import (
 
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
-	"github.com/ygelfand/echolocal/internal/feature/api"
-	"github.com/ygelfand/echolocal/internal/feature/theme"
+	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/hardware/gpu"
 	"github.com/ygelfand/echolocal/internal/hardware/touch"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/reveal"
+	"github.com/ygelfand/echolocal/internal/ui/theme"
 )
 
 func init() {
@@ -36,9 +36,6 @@ const (
 	// listFor is the least the list stays up once it has appeared, so a device that comes up in a
 	// second does not flash it past unread.
 	listFor = 3 * time.Second
-
-	// look is how often the pairing screen is reconsidered.
-	look = 250 * time.Millisecond
 
 	settle = 500 * time.Millisecond
 )
@@ -83,7 +80,7 @@ func (s *Splash) Run(ctx context.Context) error {
 		return nil
 	}
 
-	palette := theme.Get().Current()
+	palette := chosen()
 	w, h := viewed(ctx)
 	rv := reveal.New(palette)
 	layer, err := gpu.Open(w, h)
@@ -145,7 +142,7 @@ func (s *Splash) Run(ctx context.Context) error {
 			if text := summary(progress); text != said {
 				said = text
 				s.hold.Show(func(p *display.Panel) error {
-					drawBoot(p, theme.Get().Current(), progress)
+					drawBoot(p, chosen(), progress)
 					return nil
 				})
 				slog.Info("coming up", "waiting", text)
@@ -180,13 +177,14 @@ func (s *Splash) Run(ctx context.Context) error {
 		}
 	}
 	s.hold.Show(func(p *display.Panel) error {
-		ui.Fill(ui.Of(p), theme.Get().Current().Background)
+		ui.Fill(ui.Of(p), chosen().Background)
 		return nil
 	})
 	time.Sleep(2 * frame)
 
 	slog.Info("ready")
-	return s.onboard(ctx)
+	s.hold.Release()
+	return nil
 }
 
 func viewed(ctx context.Context) (int, int) {
@@ -225,56 +223,14 @@ func holding(progress []component.Progress) bool {
 	return false
 }
 
-// onboard holds the pairing code up until Home Assistant has the device. A device already adopted
-// releases the panel to whatever is under it.
-func (s *Splash) onboard(ctx context.Context) error {
-	if api.Adopted() {
-		s.hold.Release()
-		return nil
+func handOver() bool { return component.Default().Ready() }
+
+func chosen() theme.Theme {
+	t, ok := theme.ByName(config.Get().Screen.Theme)
+	if !ok {
+		return theme.Default()
 	}
-
-	// Setup rather than boot: the device is up, it is just not anybody's yet, so a notice or an
-	// alert belongs over the top of this.
-	s.hold.Release()
-	s.hold = display.Get().Claim(display.PrioritySetup)
-
-	slog.Info("waiting to be added to home assistant")
-
-	t := time.NewTicker(look)
-	defer t.Stop()
-
-	said := "\x00"
-	for !api.Adopted() {
-		key := pairing()
-		if !networked() {
-			key = ""
-		}
-
-		if key != said {
-			said = key
-			s.hold.Show(func(p *display.Panel) error {
-				drawOnboard(p, theme.Get().Current(), key)
-				return nil
-			})
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-t.C:
-		}
-	}
-
-	s.hold.Release()
-	return nil
-}
-
-// handOver reports whether the boot screen can let go.
-func handOver() bool {
-	if !component.Default().Ready() {
-		return false
-	}
-	return !api.Adopted() || display.Get().Covered(display.PriorityBoot)
+	return t
 }
 
 // summary is what the screen currently says, for deciding whether to draw it again.

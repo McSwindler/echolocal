@@ -176,3 +176,13 @@ func showing(s config.Stream) bool {
 	v, ok := shell.Get().Top().(shows)
 	return ok && v.Shows(s)
 }
+
+func clamp(level int) int {
+	switch {
+	case level < 0:
+		return 0
+	case level > 100:
+		return 100
+	}
+	return level
+}

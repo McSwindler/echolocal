@@ -16,7 +16,7 @@ import (
 const (
 	Socket  = "/dev/socket/echolocal-surface"
 	magic   = 0x53564e4c
-	version = 3
+	version = 5
 )
 
 const (

@@ -13,6 +13,7 @@ import (
 	"github.com/ygelfand/echolocal/internal/board"
 	"github.com/ygelfand/echolocal/internal/component"
 	"github.com/ygelfand/echolocal/internal/config"
+	"github.com/ygelfand/echolocal/internal/feature/screen"
 	"github.com/ygelfand/echolocal/internal/hardware/alsps"
 	"github.com/ygelfand/echolocal/internal/hardware/display"
 	"github.com/ygelfand/echolocal/internal/lib/safe"
@@ -38,10 +39,7 @@ const (
 )
 
 type Auto struct {
-	level   *esphome.Number
-	auto    *esphome.Switch
 	ambient *esphome.Sensor
-	lit     *esphome.Sensor
 
 	mu     sync.Mutex
 	sensor *alsps.Sensor
@@ -52,7 +50,6 @@ type Auto struct {
 	shown     int
 	applied   int
 	toldLux   told
-	litAt     int
 }
 
 var (
@@ -66,20 +63,7 @@ func Get() *Auto {
 }
 
 func build() *Auto {
-	a := &Auto{
-		level: &esphome.Number{
-			Base: esphome.Base{
-				ObjectID: "backlight", Name: "Brightness", Icon: "mdi:brightness-6",
-				Category: esphome.CategoryConfig, DeviceID: component.DeviceScreen,
-			},
-			Min: 0, Max: 100, Step: 1, Unit: "%", Mode: esphome.NumberSlider,
-		},
-		auto: &esphome.Switch{
-			Base: esphome.Base{
-				ObjectID: "screen_mode", Name: "Auto brightness", Icon: "mdi:brightness-auto",
-				Category: esphome.CategoryConfig, DeviceID: component.DeviceScreen,
-			},
-		},
+	return &Auto{
 		ambient: &esphome.Sensor{
 			Base: esphome.Base{
 				ObjectID: "ambient_light", Name: "Ambient light", Icon: "mdi:brightness-5",
@@ -87,31 +71,13 @@ func build() *Auto {
 			},
 			Unit: "lx", DeviceClass: "illuminance", StateClass: esphome.StateClassMeasurement,
 		},
-		lit: &esphome.Sensor{
-			Base: esphome.Base{
-				ObjectID: "screen_brightness", Name: "Screen brightness", Icon: "mdi:brightness-percent",
-				Category: esphome.CategoryDiagnostic, DeviceID: component.DeviceScreen,
-			},
-			Unit: "%", StateClass: esphome.StateClassMeasurement,
-		},
 	}
-	a.level.OnCommand = func(v float32) { a.SetLevel(int(v)) }
-	a.auto.OnCommand = a.SetAuto
-	return a
 }
 
 func (a *Auto) Name() string { return "brightness" }
 
 func (a *Auto) Entities() []esphome.Entity {
-	return []esphome.Entity{a.level, a.auto, a.ambient, a.lit}
-}
-
-func (a *Auto) Restore(c config.Config) {
-	a.level.Set(float32(c.Screen.Backlight))
-	a.auto.Set(c.Screen.Mode == config.ModeAuto)
-	if c.Screen.Mode != config.ModeAuto {
-		a.apply(c.Screen.Backlight)
-	}
+	return []esphome.Entity{a.ambient}
 }
 
 func (a *Auto) Start(context.Context) error {
@@ -172,38 +138,6 @@ func (a *Auto) Ambient() (float64, bool) {
 	return a.following, a.followed
 }
 
-// SetLevel is the slider: the panel's level in manual, and the curve's bias in auto.
-func (a *Auto) SetLevel(level int) {
-	level = max(0, min(level, 100))
-	if err := config.Set().Screen().Backlight(level); err != nil {
-		slog.Error("saving a setting failed", "setting", a.level.ObjectID, "err", err)
-		return
-	}
-	a.level.Set(float32(level))
-	if config.Get().Screen.Mode != config.ModeAuto {
-		a.apply(level)
-	}
-}
-
-// SetAuto chooses between the room and the slider.
-func (a *Auto) SetAuto(on bool) {
-	mode := config.ModeManual
-	if on {
-		mode = config.ModeAuto
-	}
-	if err := config.Set().Screen().Mode(mode); err != nil {
-		slog.Error("saving a setting failed", "setting", a.auto.ObjectID, "err", err)
-		return
-	}
-	a.auto.Set(on)
-	if !on {
-		a.apply(config.Get().Screen.Backlight)
-	}
-	a.mu.Lock()
-	a.applied = 0
-	a.mu.Unlock()
-}
-
 func (a *Auto) follow(lux float64) {
 	a.mu.Lock()
 	if !a.followed {
@@ -245,13 +179,7 @@ func (a *Auto) apply(level int) {
 		slog.Warn("setting the backlight failed", "err", err)
 		return
 	}
-	a.mu.Lock()
-	same := a.litAt == level
-	a.litAt = level
-	a.mu.Unlock()
-	if !same {
-		a.lit.Set(float32(level))
-	}
+	screen.Get().Lit(level)
 }
 
 // told is the last reading handed to Home Assistant, and when.

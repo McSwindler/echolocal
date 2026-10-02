@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/exp/shiny/materialdesign/icons"
+	gogui "github.com/go-gui-org/go-gui/gui"
 
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/livecam"
@@ -19,14 +19,8 @@ import (
 )
 
 func init() {
-	sections = append(sections, section{label: "settings.camera", icon: icons.ImagePhotoCamera, page: cameraPage})
+	sections = append(sections, section{label: "settings.camera", glyph: gogui.IconCamera, page: cameraPage})
 	pages["camera"] = cameraPage
-	features = append(features, feature{
-		label: func() string { return say.T("features.rtsp") },
-		hint:  func() string { return say.T("features.rtsp.hint") },
-		on:    func(c config.Config) bool { return c.RTSP.Enabled },
-		set:   func(on bool) { rtspd.Get().SetEnabled(on) },
-	})
 }
 
 // shown is the groups this panel offers: the ones with something in them.
@@ -54,9 +48,8 @@ var resetArmed time.Time
 
 func cameraPage() *shell.Page {
 	return camPage(&shell.Page{
-		Title:    say.T("settings.camera"),
-		Aside:    camAside,
-		AsideTap: camTap,
+		Title:   say.T("settings.camera"),
+		Preview: camWant,
 		Build: func() ([]widget.Row, []func(int)) {
 			sh := set()
 
@@ -78,6 +71,9 @@ func cameraPage() *shell.Page {
 				})
 				taps = append(taps, open(sectionPage(g)))
 			}
+			rows = append(rows, widget.Row{Label: say.T("camera.stream"), Hint: say.T("features.rtsp.hint"),
+				Kind: widget.Toggle, On: config.Get().RTSP.Enabled})
+			taps = append(taps, func(int) { rtspd.Get().SetEnabled(!config.Get().RTSP.Enabled) })
 			label := say.T("camera.reset")
 			if time.Since(resetArmed) < resetWindow {
 				label = say.T("camera.reset.confirm")
@@ -102,7 +98,7 @@ func cameraPage() *shell.Page {
 }
 
 func watching(p *shell.Page) *shell.Page {
-	p.Aside, p.AsideTap = camAside, camTap
+	p.Preview = camWant
 	return camPage(p)
 }
 
@@ -141,6 +137,9 @@ func cameraRow(s livecam.Knob, sh *livecam.Knobs) (widget.Row, func(int)) {
 		row.Kind = widget.Slider
 		row.Level = s.Percent(s.Level(sh))
 		row.Snap = func(level int) int { return s.Percent(s.Raw(level)) }
+
+		// An absolute knob says its value. A doubling one says how far along it is: a gain of 128
+		// sixteenths means nothing next to a bar, and half way does.
 		if s.Scale == setting.Linear {
 			row.Value = s.Read(sh)
 			if s.Unit != "" {
@@ -175,6 +174,8 @@ func choicePage(s livecam.Knob) *shell.Page {
 	return watching(&shell.Page{
 		Title: s.Title(),
 		Build: func() ([]widget.Row, []func(int)) {
+			// Read afresh: the page stays up while options are picked, so a value captured when
+			// it opened would leave the mark on whatever was chosen first.
 			cfg := set()
 			at := s.Read(&cfg)
 

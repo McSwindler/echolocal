@@ -10,6 +10,7 @@ var Checkers = Board{
 	DefaultName:   "Echo Show 5",
 	Caps:          Panel | Wifi | Shutter | Camera,
 	PanelRotation: 270,
+	UISize:        "compact",
 
 	CameraWidth: 1280, CameraHeight: 720,
 

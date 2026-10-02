@@ -1,35 +1,18 @@
 package idle
 
 import (
-	"image"
-	"image/color"
-	"image/png"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/ygelfand/echolocal/internal/config"
-	dashboard "github.com/ygelfand/echolocal/internal/feature/clock"
-	"github.com/ygelfand/echolocal/internal/feature/clock/face"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard"
 	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 	"github.com/ygelfand/echolocal/internal/ui/visual"
 )
 
 var noon = time.Date(2026, 9, 27, 12, 34, 0, 0, time.UTC)
-
-func inked(img *ui.Image, box ui.Rect, bg theme.Color) bool {
-	for y := box.Y; y < box.Y+box.H; y++ {
-		for x := box.X; x < box.X+box.W; x++ {
-			if img.At(x, y) != bg {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 func TestTwoVisualsSplitTheScreenTheLongWay(t *testing.T) {
 	if got := Areas(1920, 1200, 1); !slices.Equal(got, []ui.Rect{{W: 1920, H: 1200}}) {
@@ -86,50 +69,6 @@ func idled(change func(*config.Idle)) config.Config {
 	return cfg
 }
 
-func TestNoFaceAndNoVisualIsABlankScreen(t *testing.T) {
-	palette := theme.Default()
-	img := ui.NewImage(1920, 1200, theme.Color{R: 1})
-	Paint(img, idled(func(c *config.Idle) { c.Face = config.FaceNone }), nil, nil, palette, noon)
-	if inked(img, ui.Rect{W: 1920, H: 1200}, palette.Background) {
-		t.Error("something drew with no face and no visual")
-	}
-}
-
-func TestTheFaceIsDrawnOnTheSideItIsAligned(t *testing.T) {
-	palette := theme.Default()
-	for _, at := range []struct {
-		align      config.Align
-		ink, blank ui.Rect
-	}{
-		{config.AlignLeft, ui.Rect{W: 960, H: 1200}, ui.Rect{X: 1400, W: 520, H: 1200}},
-		{config.AlignRight, ui.Rect{X: 960, W: 960, H: 1200}, ui.Rect{W: 520, H: 1200}},
-	} {
-		img := ui.NewImage(1920, 1200, palette.Background)
-		cfg := idled(func(c *config.Idle) { c.Align, c.Size = at.align, config.SizeSmall })
-		Paint(img, cfg, nil, nil, palette, noon)
-		if !inked(img, at.ink, palette.Background) {
-			t.Errorf("%s: nothing drawn on its side", at.align)
-		}
-		if inked(img, at.blank, palette.Background) {
-			t.Errorf("%s: drawn on the far side", at.align)
-		}
-	}
-}
-
-func TestEachVisualLeavesItsHalfOpenForItsLayer(t *testing.T) {
-	palette := theme.Default()
-	img := ui.NewImage(1920, 1200, palette.Background)
-	slots := []config.IdleVisual{{Kind: string(visual.DigitalVU), Source: config.SourceMic}, {Kind: string(visual.Orb), Source: config.SourceSpeaker}}
-	cfg := idled(func(c *config.Idle) { c.Face, c.First, c.Second = config.FaceNone, slots[0], slots[1] })
-
-	Paint(img, cfg, slots, nil, palette, noon)
-	for _, half := range Areas(1920, 1200, 2) {
-		if inked(img, half, theme.Color{}) {
-			t.Errorf("%v was painted over", half)
-		}
-	}
-}
-
 func TestTheClockTakesItsColoursFromTheVisualUnderIt(t *testing.T) {
 	var light theme.Theme
 	for _, th := range theme.All {
@@ -170,53 +109,6 @@ func TestAClockAcrossDifferentVisualsIsSplitAtTheSeam(t *testing.T) {
 	}
 }
 
-func TestASplitClockLinesUpAcrossTheSeam(t *testing.T) {
-	palette := theme.Default()
-	cfg := idled(func(c *config.Idle) { c.Size = config.SizeMedium })
-	box := dashboard.Place(cfg.Idle.Position, cfg.Idle.Align, cfg.Idle.Size, 1920, 1200)
-	pieces := []Piece{{Clip: ui.Rect{W: 960, H: 1200}, Palette: palette}, {Clip: ui.Rect{X: 960, W: 960, H: 1200}, Palette: palette}}
-
-	whole := ui.NewImage(1920, 1200, palette.Background)
-	face.Of(cfg.Idle.Face).Draw(whole, box, reading(cfg, noon), palette)
-	split := ui.NewImage(1920, 1200, palette.Background)
-	for _, p := range pieces {
-		face.Of(cfg.Idle.Face).Draw(ui.Within(split, p.Clip), box, reading(cfg, noon), p.Palette)
-	}
-	for y := range 1200 {
-		for x := range 1920 {
-			if whole.At(x, y) != split.At(x, y) {
-				t.Fatalf("the split clock differs at %d,%d", x, y)
-			}
-		}
-	}
-}
-
-func TestALightThemeClockReadsOverADarkVisual(t *testing.T) {
-	var light theme.Theme
-	for _, th := range theme.All {
-		if !th.Dark {
-			light = th
-			break
-		}
-	}
-	slots := []config.IdleVisual{{Kind: string(visual.Orb), Source: config.SourceBoth}}
-	cfg := idled(func(c *config.Idle) { c.First = slots[0] })
-	img := ui.NewImage(1920, 1200, light.Background)
-	Paint(img, cfg, slots, nil, light, noon)
-
-	box := dashboard.Place(cfg.Idle.Position, cfg.Idle.Align, cfg.Idle.Size, 1920, 1200)
-	brightest := 0.0
-	for y := box.Y; y < box.Y+box.H; y += 2 {
-		for x := box.X; x < box.X+box.W; x += 2 {
-			c := img.At(x, y)
-			brightest = max(brightest, (0.2126*float64(c.R)+0.7152*float64(c.G)+0.0722*float64(c.B))/255)
-		}
-	}
-	if brightest < 0.8 {
-		t.Errorf("the clock over the orb is no brighter than %.2f", brightest)
-	}
-}
-
 func TestOnlyChosenVisualsAreDrawn(t *testing.T) {
 	got := chosen(config.Idle{Second: config.IdleVisual{Kind: "orb"}})
 	if len(got) != 1 || got[0].Kind != "orb" {
@@ -231,47 +123,5 @@ func TestNoneIsOfferedFirst(t *testing.T) {
 	}
 	if k, ok := kindByLabel(KindLabel("orb")); !ok || k != "orb" {
 		t.Errorf("orb by label: %q %v", k, ok)
-	}
-}
-
-func TestRenderTheIdleScreen(t *testing.T) {
-	dir := os.Getenv("LANOVO_RENDER")
-	if dir == "" {
-		t.Skip("set LANOVO_RENDER to a directory")
-	}
-	palette := theme.Default()
-	for name, at := range map[string]struct {
-		w, h  int
-		slots []config.IdleVisual
-		idle  func(*config.Idle)
-	}{
-		"idle-landscape-two": {1920, 1200,
-			[]config.IdleVisual{{Kind: string(visual.ClassicVU), Source: config.SourceMic}, {Kind: string(visual.Orb), Source: config.SourceSpeaker}},
-			func(c *config.Idle) {
-				c.Position, c.Align, c.Size = config.PositionTop, config.AlignRight, config.SizeSmall
-			}},
-		"idle-portrait-one": {1200, 1920,
-			[]config.IdleVisual{{Kind: string(visual.Orb), Source: config.SourceBoth}},
-			func(c *config.Idle) {
-				c.Position, c.Align, c.Size = config.PositionBottom, config.AlignLeft, config.SizeMedium
-			}},
-	} {
-		img := ui.NewImage(at.w, at.h, palette.Background)
-		Paint(img, idled(at.idle), at.slots, nil, palette, noon)
-		f, err := os.Create(filepath.Join(dir, name+".png"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		out := image.NewRGBA(image.Rect(0, 0, at.w, at.h))
-		for y := range at.h {
-			for x := range at.w {
-				c := img.At(x, y)
-				out.Set(x, y, color.RGBA{c.R, c.G, c.B, 255})
-			}
-		}
-		if err := png.Encode(f, out); err != nil {
-			t.Error(err)
-		}
-		f.Close()
 	}
 }

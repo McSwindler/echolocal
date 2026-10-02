@@ -37,8 +37,15 @@ const (
 	// PrevBinary is the binary an update replaced, kept until the new one has proved itself. Its
 	// presence at boot is what says a trial never finished, so nothing may leave one lying around.
 	// OldBinary is where a proven update files it, one generation back.
-	PrevBinary = Binary + ".prev"
-	OldBinary  = Binary + ".old"
+	PrevBinary = StateDir + "/echod.prev"
+	OldBinary  = StateDir + "/echod.old"
+
+	// Where older releases keep them, on /system beside the binary.
+	SystemPrevBinary = Binary + ".prev"
+	SystemOldBinary  = Binary + ".old"
+
+	// AsideBinary holds the running binary on /system while its replacement is written.
+	AsideBinary = Binary + ".aside"
 
 	// UpdatingPath holds the version being tried, so a rollback can say which one it took out. It is
 	// under /data because the boot hook reads it after a restore has already remounted /system back to
@@ -120,6 +127,8 @@ const ModelDir = StateDir + "/models"
 
 // RecordingDir holds the kept turn audio, one WAV and one metadata file per turn, named by turn id.
 const RecordingDir = StateDir + "/recordings"
+
+const TempDir = StateDir + "/tmp"
 
 // MAC normalizes an address into the form Home Assistant compares against, and reports "" for
 // anything that would not identify a device. idme writes twelve hex digits with no separators.

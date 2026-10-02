@@ -52,7 +52,9 @@ func TestRollbackRestoresAndReports(t *testing.T) {
 
 	for _, want := range []string{
 		"mount -o remount,rw /system",
-		"mv -f " + layout.PrevBinary + " " + layout.Binary,
+		"PREV=" + layout.PrevBinary,
+		"PREV=" + layout.SystemPrevBinary,
+		`cat "$PREV" > ` + layout.Binary,
 		"mount -o remount,ro /system",
 		"setprop " + layout.RolledBackProp,
 	} {

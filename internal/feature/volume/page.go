@@ -6,7 +6,6 @@ import (
 	"github.com/ygelfand/echolocal/internal/config"
 	"github.com/ygelfand/echolocal/internal/feature/shell"
 	"github.com/ygelfand/echolocal/internal/lib/say"
-	"github.com/ygelfand/echolocal/internal/ui"
 	"github.com/ygelfand/echolocal/internal/ui/widget"
 )
 
@@ -36,12 +35,10 @@ func build() *shell.Page {
 			acts := make([]func(int), 0, len(streams))
 
 			for _, s := range streams {
-				level := Get().Level(s)
 				rows = append(rows, widget.Row{
 					Label: s.Label(),
 					Kind:  widget.Slider,
-					Level: level,
-					Icon:  glyph(s, level),
+					Level: Get().Level(s),
 				})
 				acts = append(acts, set(s))
 			}
@@ -53,7 +50,3 @@ func build() *shell.Page {
 func set(s config.Stream) func(int) {
 	return func(level int) { Get().Set(s, level) }
 }
-
-// Mark is the icon that says how loud a kind of sound is, for anywhere outside this package that
-// wants the level without a number.
-func Mark(s config.Stream) ui.Icon { return glyph(s, Get().Level(s)) }

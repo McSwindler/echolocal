@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ygelfand/echolocal/internal/config"
-	"github.com/ygelfand/echolocal/internal/feature/clock"
+	"github.com/ygelfand/echolocal/internal/feature/dashboard"
 	"github.com/ygelfand/echolocal/internal/feature/idle"
 	"github.com/ygelfand/echolocal/internal/feature/privacy"
-	apptheme "github.com/ygelfand/echolocal/internal/feature/theme"
+	"github.com/ygelfand/echolocal/internal/feature/screen"
 	"github.com/ygelfand/echolocal/internal/feature/visuals"
 	"github.com/ygelfand/echolocal/internal/ui/theme"
 	"github.com/ygelfand/echolocal/internal/ui/visual"
@@ -37,7 +37,7 @@ func settings() []setting {
 }
 
 func screenSettings() []setting {
-	c, i, v := clock.Get(), idle.Get(), visuals.Get()
+	c, i, v := dashboard.Get(), idle.Get(), visuals.Get()
 
 	return []setting{
 		{"clock.face", func(c config.Config) string { return string(c.Clock.Face) }, choose(config.Faces(), c.SetFace)},
@@ -60,6 +60,10 @@ func screenSettings() []setting {
 			choose(config.Sources(), func(s config.Source) { i.SetSource(1, s) })},
 
 		{"screen.theme", func(c config.Config) string { return c.Screen.Theme }, paint},
+		{"screen.style", func(c config.Config) string { return screen.Table().Row("style").Read(&c.Screen) },
+			func(v string) error { return screen.Get().Set("style", v) }},
+		{"screen.size", func(c config.Config) string { return screen.Table().Row("size").Read(&c.Screen) },
+			func(v string) error { return screen.Get().Set("size", v) }},
 		{"screen.marks", func(c config.Config) string { return onOff(c.Screen.Marks) }, toggle(privacy.Get().SetMarks)},
 		{"screen.logo", func(c config.Config) string { return onOff(c.Screen.Logo) }, toggle(c.SetLogo)},
 		{"screen.visual", func(c config.Config) string { return c.Visual.Kind }, choose(visual.Built(), v.SetKind)},
@@ -196,7 +200,10 @@ func fpsStep(s string) error {
 func paint(s string) error {
 	for _, t := range theme.All {
 		if strings.EqualFold(t.Name, s) {
-			apptheme.Get().Choose(t.Name)
+			if err := config.Set().Screen().Theme(t.Name); err != nil {
+				return err
+			}
+			screen.Get().Use(t.Name)
 			return nil
 		}
 	}

@@ -24,6 +24,7 @@
 #include "drm.h"
 #include "gl.h"
 #include "protocol.h"
+#include "ui.h"
 #include "video.h"
 
 #define TAG "echolocal-surface"
@@ -101,6 +102,8 @@ typedef struct {
 	video vid;
 	int is_gl;
 	glview gl;
+	int is_ui;
+	uiview ui;
 } layer;
 
 typedef struct {
@@ -152,6 +155,7 @@ static layer *find(uint32_t id) {
 static void drop(layer *l) {
 	if (l->is_video) video_close(&l->vid);
 	if (l->is_gl) gl_close(&l->gl);
+	if (l->is_ui) ui_close(&l->ui);
 	if (l->sc) {
 		sf_open();
 		sc_hide(l->sc);
@@ -569,6 +573,77 @@ static int gl_readback(int conn, const uint32_t *a) {
 	return err;
 }
 
+static int ui_new(int conn, const uint32_t *a) {
+	uint32_t id = a[0], w = a[1], h = a[2];
+	int32_t z = (int32_t)a[3];
+	if (find(id) || w == 0 || h == 0 || w > 4096 || h > 4096) return reply(conn, OP_UI_OPEN, (uint32_t[]){id, ERR_ARGS}, 2, -1);
+	layer *l = free_slot();
+	if (!l) return reply(conn, OP_UI_OPEN, (uint32_t[]){id, ERR_FULL}, 2, -1);
+	int st = surface_for(l, id, w, h, 0, 0, z, 0);
+	if (st == OK) {
+		st = ui_open(&l->ui, l->win, (int)w, (int)h);
+		if (st == OK) l->is_ui = 1;
+		else drop(l);
+	}
+	return reply(conn, OP_UI_OPEN, (uint32_t[]){id, (uint32_t)st}, 2, -1);
+}
+
+static int ui_source(int conn, const uint32_t *a, uint32_t len) {
+	uint32_t id = a[0], slot = a[1], vslen = a[2], fslen = a[3];
+	if (!wire_bytes(len, 16, (uint64_t)vslen + fslen)) return -1;
+	layer *l = find(id);
+	int st = ERR_ARGS;
+	if (l && l->is_ui && slot < UI_PROGRAMS) {
+		const char *src = (const char *)(a + 4);
+		ui_program(&l->ui, (int)slot, src, (int)vslen, src + vslen, (int)fslen);
+		st = OK;
+	}
+	return reply(conn, OP_UI_PROGRAM, (uint32_t[]){(uint32_t)st}, 1, -1);
+}
+
+static int ui_tex(const uint32_t *a, uint32_t len) {
+	uint32_t id = a[0], tex = a[1], w = a[2], h = a[3], x = a[4], y = a[5], rw = a[6], rh = a[7];
+	if (w > 4096 || h > 4096 || rw > w || rh > h || x + rw > w || y + rh > h) return -1;
+	if ((uint64_t)rw * rh * 4 + 32 != len) return -1;
+	layer *l = find(id);
+	if (l && l->is_ui) ui_texture(&l->ui, tex, (int)w, (int)h, (int)x, (int)y, (int)rw, (int)rh, (const uint8_t *)(a + 8));
+	return 0;
+}
+
+static int ui_draw(int conn, const uint32_t *a, uint32_t len) {
+	uint32_t id = a[0], rot = a[5], nquads = a[6], nruns = a[7];
+	if ((uint64_t)nquads * UI_QUAD_FLOATS * 4 + (uint64_t)nruns * UI_RUN_WORDS * 4 + 32 != len) return -1;
+	layer *l = find(id);
+	if (!l || !l->is_ui) return reply(conn, OP_UI_FRAME, (uint32_t[]){ERR_ARGS, 0, 0, 0}, 4, -1);
+	float clear[4];
+	memcpy(clear, a + 1, sizeof clear);
+	const float *quads = (const float *)(a + 8);
+	const uint32_t *runs = a + 8 + nquads * UI_QUAD_FLOATS;
+	uint32_t frame = ui_frame(&l->ui, (int)(rot & 3), clear, quads, (int)nquads, runs, (int)nruns);
+	uint32_t submit = 0, finish = 0;
+	ui_wait(&l->ui, frame, &submit, &finish);
+	return reply(conn, OP_UI_FRAME, (uint32_t[]){OK, frame, submit, finish}, 4, -1);
+}
+
+static int ui_readback(int conn, const uint32_t *a) {
+	uint32_t id = a[0];
+	layer *l = find(id);
+	if (!l || !l->is_ui) return reply(conn, OP_UI_READ, (uint32_t[]){id, ERR_ARGS}, 2, -1);
+	size_t size = (size_t)l->ui.w * l->ui.h * 4;
+	int mfd = syscall(__NR_memfd_create, "echolocal-read", 0);
+	uint8_t *pix = MAP_FAILED;
+	if (mfd >= 0 && ftruncate(mfd, size) == 0) pix = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, mfd, 0);
+	if (pix == MAP_FAILED) {
+		if (mfd >= 0) close(mfd);
+		return reply(conn, OP_UI_READ, (uint32_t[]){id, ERR_MEMORY}, 2, -1);
+	}
+	int st = ui_read(&l->ui, pix);
+	munmap(pix, size);
+	int err = reply(conn, OP_UI_READ, (uint32_t[]){id, (uint32_t)st, (uint32_t)l->ui.w, (uint32_t)l->ui.h}, 4, st == OK ? mfd : -1);
+	close(mfd);
+	return err;
+}
+
 #define PIXEL_RGBA_8888 1
 #define PIXEL_RGBX_8888 2
 #define PIXEL_BGRA_8888 5
@@ -743,6 +818,21 @@ static void serve(int conn) {
 			break;
 		case OP_SCREEN_READ:
 			err = hdr[1] == 0 ? screen_read(conn) : -1;
+			break;
+		case OP_UI_OPEN:
+			err = hdr[1] == 16 ? ui_new(conn, buf) : -1;
+			break;
+		case OP_UI_PROGRAM:
+			err = hdr[1] >= 16 ? ui_source(conn, buf, hdr[1]) : -1;
+			break;
+		case OP_UI_TEXTURE:
+			err = hdr[1] >= 32 ? ui_tex(buf, hdr[1]) : -1;
+			break;
+		case OP_UI_FRAME:
+			err = hdr[1] >= 32 ? ui_draw(conn, buf, hdr[1]) : -1;
+			break;
+		case OP_UI_READ:
+			err = hdr[1] == 4 ? ui_readback(conn, buf) : -1;
 			break;
 		case OP_GL_QUADS:
 			if (hdr[1] >= 8) gl_fills(buf, hdr[1]);

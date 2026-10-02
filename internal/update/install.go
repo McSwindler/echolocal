@@ -52,6 +52,7 @@ func Install(ctx context.Context, m Manifest, progress func(float32)) error {
 	if err := download(ctx, b, staged, progress); err != nil {
 		return err
 	}
+	tidy()
 	if err := room(b.Size); err != nil {
 		return err
 	}
@@ -113,32 +114,46 @@ func swap(staged, version string) error {
 		slog.Error("recording the version being installed failed", "err", err)
 	}
 
-	if err := writable(true); err != nil {
-		return fmt.Errorf("update: remounting to install: %w", err)
-	}
-	defer func() {
-		if err := writable(false); err != nil {
-			slog.Error("remounting read-only failed", "err", err)
-		}
-	}()
-
-	if err := os.Rename(layout.Binary, prev); err != nil {
+	part := prev + ".part"
+	if err := copyTo(binary, part); err != nil {
+		os.Remove(part)
 		return fmt.Errorf("update: keeping the running binary: %w", err)
 	}
-	if err := copyTo(staged, layout.Binary); err != nil {
-		// Put it back rather than leaving a device with no binary at all for the next boot to find.
-		if back := os.Rename(prev, layout.Binary); back != nil {
-			slog.Error("could not put the previous binary back", "err", back)
+	if err := os.Rename(part, prev); err != nil {
+		os.Remove(part)
+		return fmt.Errorf("update: keeping the running binary: %w", err)
+	}
+
+	if err := onSystem(func() error { return replace(staged) }); err != nil {
+		if exists(binary) {
+			os.Remove(prev)
+		}
+		return fmt.Errorf("update: installing: %w", err)
+	}
+	slog.Warn("update installed, restarting into it", "version", version, "previous", prev)
+	return nil
+}
+
+func replace(staged string) error {
+	if err := os.Rename(binary, aside); err != nil {
+		return err
+	}
+	if err := copyTo(staged, binary); err != nil {
+		os.Remove(binary)
+		if back := os.Rename(aside, binary); back != nil {
+			slog.Error("could not put the running binary back", "err", back)
 		}
 		return err
 	}
 
 	// The label decides whether init will start the service at all, and which firmware this is decides
-	// what it has to be. prev kept its own through the rename, so the answer is already on the device.
-	if err := copyLabel(prev, layout.Binary); err != nil {
+	// what it has to be. The running binary kept its own through the rename.
+	if err := copyLabel(aside, binary); err != nil {
 		slog.Warn("labelling the new binary failed", "err", err)
 	}
-	slog.Warn("update installed, restarting into it", "version", version, "previous", prev)
+	if err := os.Remove(aside); err != nil {
+		slog.Warn("removing the set-aside binary failed", "path", aside, "err", err)
+	}
 	return nil
 }
 

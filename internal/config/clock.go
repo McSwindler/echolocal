@@ -1,7 +1,5 @@
 package config
 
-import "github.com/ygelfand/echolocal/internal/lib/say"
-
 // Clock is the face the panel shows when nothing else is on it.
 type Clock struct {
 	Face     Face     `json:"face"`
@@ -101,6 +99,7 @@ type Face string
 
 const (
 	FacePlain         Face = "plain"
+	FaceStack         Face = "stack"
 	FaceCards         Face = "cards"
 	FaceAnalog        Face = "analog"
 	FaceAnalogSeconds Face = "analog-seconds"
@@ -117,6 +116,8 @@ func (f Face) Label() string {
 		return say.T("face.none")
 	case FacePlain:
 		return say.T("face.plain")
+	case FaceStack:
+		return say.T("face.stack")
 	case FaceCards:
 		return say.T("face.cards")
 	case FaceAnalog:
@@ -134,7 +135,7 @@ func (f Face) Label() string {
 }
 
 func Faces() []Face {
-	return []Face{FacePlain, FaceCards, FaceAnalog, FaceAnalogSeconds, FaceSegments, FaceWords, FaceOverlap}
+	return []Face{FacePlain, FaceStack, FaceCards, FaceAnalog, FaceAnalogSeconds, FaceSegments, FaceWords, FaceOverlap}
 }
 
 type ClockWriter struct{ st *Store }

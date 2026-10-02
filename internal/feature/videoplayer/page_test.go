@@ -2,83 +2,61 @@ package videoplayer
 
 import (
 	"testing"
+	"time"
 
-	"github.com/ygelfand/echolocal/internal/ui"
-	"github.com/ygelfand/echolocal/internal/ui/theme"
+	"github.com/ygelfand/echolocal/internal/feature/media"
 )
 
-type clearing struct {
-	*ui.Image
-	cleared []ui.Rect
+type fake struct {
+	now    media.Now
+	paused int
 }
 
-func (c *clearing) ClearRect(r ui.Rect) { c.cleared = append(c.cleared, r) }
+func (f *fake) Play()                 { f.now.Paused = false }
+func (f *fake) Pause()                { f.now.Paused = true; f.paused++ }
+func (f *fake) Stop()                 {}
+func (f *fake) Next()                 {}
+func (f *fake) Previous()             {}
+func (f *fake) Playing() (bool, bool) { return f.now.Playing, f.now.Paused }
+func (f *fake) Now() media.Now        { return f.now }
+func (f *fake) Kind() media.Kind      { return media.FromCast }
+func (f *fake) Label() string         { return "phone" }
+func (f *fake) Seek(time.Duration)    {}
+func (f *fake) CanSeek() bool         { return true }
 
-func TestAPlayingPictureShowsThroughThePage(t *testing.T) {
-	p := NewPage(playing())
-	p.SetPicture(true)
-	s := &clearing{Image: ui.NewImage(1920, 1200, theme.Color{R: 1})}
-	p.Draw(s, theme.All[0])
-	if len(s.cleared) != 1 || s.cleared[0] != (ui.Rect{W: 1920, H: 1200}) {
-		t.Errorf("cleared %v, want the whole page", s.cleared)
-	}
-}
-
-func TestWithoutAPictureThePageIsOpaque(t *testing.T) {
-	p := NewPage(playing())
-	p.SetNote("refused")
-	s := &clearing{Image: ui.NewImage(1920, 1200, theme.Color{R: 1})}
-	p.Draw(s, theme.All[0])
-	if len(s.cleared) != 0 {
-		t.Errorf("cleared %v with no picture to show", s.cleared)
-	}
-}
-
-func TestThePageKeepsEveryTapAndItsButtonsAct(t *testing.T) {
-	f := playing()
-	p := NewPage(f)
-	p.SetPicture(true)
-	if !p.Tap(600, 100) {
-		t.Fatal("a tap on the video closed the shell")
-	}
-	p.Draw(ui.NewImage(1920, 1200, theme.Color{}), theme.All[0])
-	p.mu.Lock()
-	hits := p.hits
-	p.mu.Unlock()
-	var pause hit
-	for _, h := range hits {
-		if h.at.W < 400 && h.at.W > pause.at.W {
-			pause = h
-		}
-	}
-	x, y := pause.at.Center()
-	if !p.Tap(x, y) || f.paused != 1 {
-		t.Errorf("tapping the biggest button paused %d times", f.paused)
-	}
-	if !p.Tap(600, 100) {
-		t.Error("a tap away from the controls closed the shell")
-	}
+func playing() *fake {
+	return &fake{now: media.Now{Playing: true, Title: "a video", Elapsed: 95 * time.Second, Length: 14 * time.Minute}}
 }
 
 func TestFollowPointsTheControlsAtTheNextTrack(t *testing.T) {
 	first, next := playing(), playing()
 	p := NewPage(first)
 	p.Follow(next)
-	p.SetPicture(true)
-	p.Tap(600, 100)
-	p.Draw(ui.NewImage(1920, 1200, theme.Color{}), theme.All[0])
-	p.mu.Lock()
-	hits := p.hits
-	p.mu.Unlock()
-	var pause hit
-	for _, h := range hits {
-		if h.at.W < 400 && h.at.W > pause.at.W {
-			pause = h
-		}
-	}
-	x, y := pause.at.Center()
-	p.Tap(x, y)
+	p.Look().Controls.Pause()
 	if first.paused != 0 || next.paused != 1 {
 		t.Errorf("paused the first track %d times and the next %d", first.paused, next.paused)
+	}
+}
+
+func TestRevealAndConcealToggleTheControls(t *testing.T) {
+	p := NewPage(playing())
+	if p.Look().Shown {
+		t.Fatal("controls showing before anything asked for them")
+	}
+	p.Reveal()
+	if !p.Look().Shown {
+		t.Fatal("reveal left the controls hidden")
+	}
+	p.Conceal()
+	if p.Look().Shown {
+		t.Error("conceal left the controls showing")
+	}
+}
+
+func TestAPictureEndsTheLoadingSpinner(t *testing.T) {
+	p := NewPage(playing())
+	p.SetPicture(true)
+	if look := p.Look(); !look.Picture || look.Spinning {
+		t.Errorf("picture %v, spinning %v", look.Picture, look.Spinning)
 	}
 }
