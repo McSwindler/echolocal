@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,6 +14,7 @@
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <android/log.h>
@@ -815,6 +817,74 @@ static int listener(void) {
 	return s;
 }
 
+#define WAIT_ID 0xfffffff0u
+#define WAIT_Z 1000
+
+static layer *wait_layer;
+static pthread_t wait_th;
+static volatile int waiting;
+
+static const char wait_fs[] =
+	"void main() {\n"
+	"	highp vec2 p = gl_FragCoord.xy - res * 0.5;\n"
+	"	float s = min(res.x, res.y);\n"
+	"	float r = s * 0.028, gap = r * 3.5;\n"
+	"	vec2 along = res.x >= res.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);\n"
+	"	vec4 o = vec4(0.0);\n"
+	"	for (int i = 0; i < 3; i++) {\n"
+	"		float d = length(p - along * float(i - 1) * gap) / r;\n"
+	"		float lit = 0.35 + 0.65 * max(sin(6.283185 * (u[0] / 1.2 - float(i) / 6.0)), 0.0);\n"
+	"		float inner = 1.0 - smoothstep(0.6, 0.7, d);\n"
+	"		float alpha = (1.0 - smoothstep(0.88, 1.0, d)) * mix(0.85, lit, inner);\n"
+	"		vec3 c = mix(vec3(0.05), vec3(1.0), inner);\n"
+	"		if (alpha > o.a) o = vec4(c * alpha, alpha);\n"
+	"	}\n"
+	"	gl_FragColor = o;\n"
+	"}\n";
+
+static void *wait_loop(void *arg) {
+	layer *l = arg;
+	struct timespec t0, now;
+	clock_gettime(CLOCK_MONOTONIC, &t0);
+	while (waiting) {
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		float t = (float)((now.tv_sec - t0.tv_sec) + (now.tv_nsec - t0.tv_nsec) / 1e9);
+		gl_values(&l->gl, &t, 1, (gl_glow){0});
+		struct timespec tick = {0, 33 * 1000 * 1000};
+		nanosleep(&tick, NULL);
+	}
+	return NULL;
+}
+
+static void wait_start(void) {
+	layer *l = free_slot();
+	if (!l || surface_for(l, WAIT_ID, (uint32_t)panel_w, (uint32_t)panel_h, 0, 0, WAIT_Z, 0) != OK) return;
+	if (gl_open(&l->gl, l->win, panel_w, panel_h) != OK) {
+		drop(l);
+		return;
+	}
+	l->is_gl = 1;
+	if (gl_program(&l->gl, wait_fs, (int)sizeof wait_fs - 1, 0) != OK) {
+		drop(l);
+		return;
+	}
+	wait_layer = l;
+	waiting = 1;
+	if (pthread_create(&wait_th, NULL, wait_loop, l) != 0) {
+		waiting = 0;
+		drop(l);
+		wait_layer = NULL;
+	}
+}
+
+static void wait_stop(void) {
+	if (!wait_layer) return;
+	waiting = 0;
+	pthread_join(wait_th, NULL);
+	drop(wait_layer);
+	wait_layer = NULL;
+}
+
 int main(void) {
 	signal(SIGPIPE, SIG_IGN);
 	int lsock = listener();
@@ -836,11 +906,13 @@ int main(void) {
 	for (;;) {
 		int conn = accept(lsock, NULL, NULL);
 		if (conn < 0) continue;
+		wait_stop();
 		logi("client connected");
 		serve(conn);
 		close(conn);
 		release_protected();
 		orphan_all();
 		logi("client gone; keeping its layers until the next one draws");
+		wait_start();
 	}
 }
