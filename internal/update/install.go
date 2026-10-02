@@ -151,9 +151,7 @@ func replace(staged string) error {
 	if err := copyLabel(aside, binary); err != nil {
 		slog.Warn("labelling the new binary failed", "err", err)
 	}
-	if err := os.Remove(aside); err != nil {
-		slog.Warn("removing the set-aside binary failed", "path", aside, "err", err)
-	}
+	// ext4 refuses a read-only remount while a deleted file is still open.
 	return nil
 }
 

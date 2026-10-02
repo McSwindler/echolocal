@@ -100,12 +100,17 @@ func TestSwapKeepsThePreviousOnData(t *testing.T) {
 	if got, _ := os.ReadFile(prev); string(got) != "running" {
 		t.Errorf("prev holds %q, want the one it replaced", got)
 	}
+	if !exists(aside) {
+		t.Error("the running binary was deleted while it runs")
+	}
+
+	Commit()
 	entries, err := os.ReadDir(filepath.Dir(binary))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(entries) != 1 {
-		t.Errorf("/system holds %d files, want only the binary", len(entries))
+		t.Errorf("/system holds %d files after committing, want only the binary", len(entries))
 	}
 }
 
