@@ -1,4 +1,4 @@
-//go:build !board_checkers && !board_cronos
+//go:build !board_checkers && !board_cronos && !board_doppler
 
 package mic
 

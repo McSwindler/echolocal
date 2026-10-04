@@ -3,7 +3,7 @@ package board
 import "strings"
 
 // All is every board this build knows by name, whether or not it can be installed to.
-var All = []Board{Biscuit, Crown, Checkers, Cronos, Donut, Rook, Radar}
+var All = []Board{Biscuit, Crown, Checkers, Cronos, Donut, Doppler, Rook, Radar}
 
 // For is the board a ro.product.device belongs to. A board with no Device never matches.
 func For(device string) (Board, bool) {

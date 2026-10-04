@@ -1,16 +1,18 @@
-//go:build !board_doppler
+//go:build board_doppler
 
 package echod
 
 import (
+	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
+	"os/exec"
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/ygelfand/echolocal/internal/lib/alsa"
 )
 
 // The playback codec accepts one format only.
@@ -43,14 +45,7 @@ func newPlayCmd() *cobra.Command {
 			"broken stream from a muted one.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			p, err := alsa.OpenPlayback(card, device, alsa.Config{
-				Channels:   playChannels,
-				Rate:       playRate,
-				Format:     alsa.FormatS16_LE,
-				Bits:       playBits,
-				PeriodSize: playPeriod,
-				Periods:    playPeriods,
-			})
+			p, err := NewPaplayPlayer(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -72,17 +67,17 @@ func newPlayCmd() *cobra.Command {
 				fill(buf[:n*playChannels*playBits/8], done, freq, level, silence, channel)
 
 				if _, err := p.Write(buf[:n*playChannels*playBits/8]); err != nil {
-					if err == alsa.ErrUnderrun {
-						fmt.Fprintln(out, "underrun")
-						continue
-					}
-					return err
+					return fmt.Errorf("audio playback: %w", err)
 				}
 				done += n
 			}
 
-			if err := p.Drain(); err != nil {
-				return fmt.Errorf("drain: %w", err)
+			if err := p.Close(); err != nil {
+				return fmt.Errorf("finish audio input: %w", err)
+			}
+
+			if err := p.Wait(); err != nil {
+				return fmt.Errorf("playback: %w", err)
 			}
 			fmt.Fprintf(out, "wrote %d frames in %s\n", frames, time.Since(start).Round(time.Millisecond))
 			return nil
@@ -116,4 +111,59 @@ func fill(buf []byte, offset int, freq, level float64, silence bool, channel str
 			binary.LittleEndian.PutUint16(buf[(i*playChannels+ch)*2:], uint16(v))
 		}
 	}
+}
+
+type PaplayPlayer struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stderr io.ReadCloser
+}
+
+func NewPaplayPlayer(ctx context.Context) (*PaplayPlayer, error) {
+	cmd := exec.CommandContext(
+		ctx,
+		"paplay",
+		"--raw",
+		"--format=s16le",
+		"--rate=48000",
+		"--channels=2",
+	)
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("create paplay stdin: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("create paplay stderr: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start paplay: %w", err)
+	}
+
+	return &PaplayPlayer{
+		cmd:    cmd,
+		stdin:  stdin,
+		stderr: stderr,
+	}, nil
+}
+
+func (p *PaplayPlayer) Write(data []byte) (int, error) {
+	return p.stdin.Write(data)
+}
+
+func (p *PaplayPlayer) Close() error {
+	return p.stdin.Close()
+}
+
+func (p *PaplayPlayer) Wait() error {
+	err := p.cmd.Wait()
+	if err == nil {
+		return nil
+	}
+
+	message, _ := io.ReadAll(p.stderr)
+	return fmt.Errorf("%w: %s", err, bytes.TrimSpace(message))
 }

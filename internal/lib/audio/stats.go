@@ -18,6 +18,15 @@ func DecodeS24LE3(b []byte) int32 {
 	return v
 }
 
+
+func DecodeS16LE(b []byte) int32 {
+	v := int32(b[0]) | int32(b[1])<<8
+	if v&0x8000 != 0 {
+		v |= ^0xFFFF
+	}
+	return v
+}
+
 // Stats accumulates per-channel level measurements over a capture.
 //
 // TruncErr tracks what a 24→16-bit truncation would discard, which is the only way to tell
