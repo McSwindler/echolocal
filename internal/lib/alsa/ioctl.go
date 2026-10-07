@@ -2,6 +2,7 @@ package alsa
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strconv"
 	"syscall"
@@ -154,3 +155,9 @@ func ioctlArgless(fd, req uintptr) error {
 
 // ErrOverrun means the hardware ring wrapped before we read it; audio was lost.
 var ErrOverrun = fmt.Errorf("alsa: capture overrun")
+
+// ErrUnderrun means the hardware ran out of samples; playback gapped.
+var ErrUnderrun = fmt.Errorf("alsa: playback underrun")
+
+// ErrBusy means another process holds the device.
+var ErrBusy = errors.New("alsa: device busy")

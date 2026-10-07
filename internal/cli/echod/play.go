@@ -1,5 +1,3 @@
-//go:build !board_doppler
-
 package echod
 
 import (

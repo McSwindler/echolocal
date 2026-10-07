@@ -1,3 +1,5 @@
+//go:build !board_doppler
+
 package alsa
 
 import (
@@ -136,12 +138,6 @@ func (p *Playback) Close() error {
 	_ = ioctlArgless(p.f.Fd(), ioctlDrop)
 	return p.f.Close()
 }
-
-// ErrUnderrun means the hardware ran out of samples; playback gapped.
-var ErrUnderrun = fmt.Errorf("alsa: playback underrun")
-
-// ErrBusy means another process holds the device.
-var ErrBusy = errors.New("alsa: device busy")
 
 // clearNonBlock puts the descriptor back into blocking mode.
 func clearNonBlock(f *os.File) error {
