@@ -1,5 +1,3 @@
-//go:build !board_doppler
-
 package echod
 
 import (
@@ -9,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ygelfand/echolocal/internal/hardware/mic"
 	"github.com/ygelfand/echolocal/internal/lib/alsa"
 	"github.com/ygelfand/echolocal/internal/lib/audio"
 )
@@ -18,6 +17,7 @@ func newMicCmd() *cobra.Command {
 		card, device    int
 		chans, rate     int
 		period, periods int
+		bits, format    int
 		secs            float64
 		rawPath         string
 	)
@@ -35,8 +35,8 @@ func newMicCmd() *cobra.Command {
 			pcm, err := alsa.Open(card, device, alsa.Config{
 				Channels:   chans,
 				Rate:       rate,
-				Format:     alsa.FormatS24_3LE,
-				Bits:       24,
+				Format:     format,
+				Bits:       bits,
 				PeriodSize: period,
 				Periods:    periods,
 			})
@@ -54,8 +54,8 @@ func newMicCmd() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "capturing %.1fs: %d ch @ %d Hz, S24_3LE, period %d x %d\n",
-				secs, chans, rate, period, periods)
+			fmt.Fprintf(out, "capturing %.1fs: %d ch @ %d Hz, %d bits, period %d x %d\n",
+				secs, chans, rate, bits, period, periods)
 
 			st := make([]audio.Stats, chans)
 			buf := make([]byte, period*pcm.FrameBytes())
@@ -79,7 +79,7 @@ func newMicCmd() *cobra.Command {
 				fb := pcm.FrameBytes()
 				for off := 0; off+fb <= n; off += fb {
 					for ch := 0; ch < chans; ch++ {
-						st[ch].Add(audio.DecodeS24LE3(buf[off+ch*3:]))
+						st[ch].Add(int32(mic.DecodeSample(buf[off+ch*fb:])))
 					}
 				}
 			}
@@ -98,6 +98,8 @@ func newMicCmd() *cobra.Command {
 	c.Flags().IntVarP(&rate, "rate", "r", 16000, "sample rate (hardware accepts only 16000)")
 	c.Flags().IntVarP(&period, "period", "p", 256, "period size in frames")
 	c.Flags().IntVarP(&periods, "periods", "n", 10, "period count")
+	c.Flags().IntVarP(&bits, "bits", "b", 24, "bits")
+	c.Flags().IntVarP(&format, "format", "f", alsa.FormatS24_3LE, "format")
 	c.Flags().Float64VarP(&secs, "seconds", "t", 5, "capture duration")
 	c.Flags().StringVar(&rawPath, "raw", "", "also write raw interleaved S24_3LE here")
 	return c

@@ -22,7 +22,6 @@ import (
 
 const (
 	Rate = 16000
-	Bits = 24
 
 	Card = 0
 
@@ -207,7 +206,7 @@ func (s *Source) open() error {
 	pcm, err := alsa.Open(Card, CaptureDevice, alsa.Config{
 		Channels:   Channels,
 		Rate:       Rate,
-		Format:     alsa.FormatS24_3LE,
+		Format:     Format,
 		Bits:       Bits,
 		PeriodSize: period,
 		Periods:    periods,
@@ -300,7 +299,8 @@ func Decode(raw []byte) [][]int16 { return decode(raw, 0, Mics) }
 func Reference(raw []byte) [][]int16 { return decode(raw, Mics, Refs) }
 
 func decode(raw []byte, first, n int) [][]int16 {
-	const frameBytes = Channels * Bits / 8
+	bytesPerSample := Bits / 8
+	frameBytes := Channels * bytesPerSample
 
 	frames := len(raw) / frameBytes
 	out := make([][]int16, n)
@@ -310,8 +310,8 @@ func decode(raw []byte, first, n int) [][]int16 {
 	for f := range frames {
 		off := f * frameBytes
 		for c := range out {
-			at := off + (first+c)*3
-			out[c][f] = int16(audio.DecodeS24LE3(raw[at:at+3]) >> 8)
+			at := off + (first+c)*bytesPerSample
+			out[c][f] = DecodeSample(raw[at : at+bytesPerSample])
 		}
 	}
 	return out
@@ -398,7 +398,10 @@ func (s *Source) broadcast(raw []byte) {
 	// While something is playing, the echo cancelled center microphone replaces the mix. It has to be
 	// one fixed microphone: the filter learns a single acoustic path, and the beamformer would steer at
 	// the loudest thing in the room, which during playback is the speaker being cancelled.
-	sounding := s.sounding(raw, len(mics[CenterMic]))
+	sounding := false
+	if Refs > 0 {
+		sounding = s.sounding(raw, len(mics[CenterMic]))
+	}
 	s.leveler.atPlayback(sounding)
 
 	quiet := s.suppress != nil
@@ -522,12 +525,27 @@ func (s *Source) Close() error {
 // Mono takes the center microphone alone, narrowed from 24 bits to 16. The beamformed mix is what
 // listeners get; this is for tools that need one microphone as it comes off the hardware.
 func Mono(raw []byte) []int16 {
-	const frameBytes = Channels * Bits / 8
+	bytesPerSample := Bits / 8
+	frameBytes := Channels * bytesPerSample
 
 	out := make([]int16, len(raw)/frameBytes)
 	for i := range out {
-		o := i*frameBytes + CenterMic*3
-		out[i] = int16(audio.DecodeS24LE3(raw[o:o+3]) >> 8)
+		o := i*frameBytes + CenterMic*bytesPerSample
+		out[i] = DecodeSample(raw[o : o+bytesPerSample])
 	}
 	return out
+}
+
+func DecodeSample(raw []byte) int16 {
+	switch Format {
+	case alsa.FormatS16_LE:
+		return int16(audio.DecodeS16LE(raw[:2]))
+
+	case alsa.FormatS24_3LE:
+		// Convert signed 24-bit PCM to signed 16-bit PCM.
+		return int16(audio.DecodeS24LE3(raw[:3]) >> 8)
+
+	default:
+		panic("unknown PCM sample format")
+	}
 }

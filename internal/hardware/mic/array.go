@@ -2,10 +2,16 @@
 
 package mic
 
+import (
+	"github.com/ygelfand/echolocal/internal/lib/alsa"
+)
+
 // The capture codec accepts one format only: 16 kHz, S24_3LE, 9 channels.
 const (
 	Channels      = 9
 	CaptureDevice = 24
+	Format        = alsa.FormatS24_3LE
+	Bits          = 24
 )
 
 // Mics is how many of the nine channels are microphones. ch7 and ch8 are the playback loopback.

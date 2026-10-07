@@ -8,9 +8,6 @@ import (
 	"unsafe"
 )
 
-// FormatS16_LE is 16-bit little endian, the only format the playback codec accepts.
-const FormatS16_LE = 2
-
 var (
 	ioctlWritei = ioc(1, 'A', 0x50, xferiSize)
 	ioctlDrain  = ioc(0, 'A', 0x44, 0)

@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ygelfand/echolocal/internal/lib/aec"
-	"github.com/ygelfand/echolocal/internal/lib/audio"
 )
 
 // cancelTaps is the echo tail the filter reaches, 64 ms. Measured on a Dot: 13.7% of a core.
@@ -183,12 +182,13 @@ func power(s []int16) float64 {
 // music the two measure within 12-17 dB of each other, which caps cancellation far above anything the
 // filter reaches, so a stereo reference would buy nothing.
 func referenceInto(raw []byte, dst []int16) {
-	const frameBytes = Channels * Bits / 8
+	bytesPerSample := Bits / 8
+	frameBytes := Channels * bytesPerSample
 
 	frames := min(len(raw)/frameBytes, len(dst))
 	for f := range frames {
-		o := f*frameBytes + Mics*3
-		dst[f] = int16(audio.DecodeS24LE3(raw[o:o+3]) >> 8)
+		o := f*frameBytes + Mics*bytesPerSample
+		dst[f] = DecodeSample(raw[o : o+bytesPerSample])
 	}
 	for f := frames; f < len(dst); f++ {
 		dst[f] = 0

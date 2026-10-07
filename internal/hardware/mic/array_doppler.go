@@ -2,10 +2,16 @@
 
 package mic
 
+import (
+	"github.com/ygelfand/echolocal/internal/lib/alsa"
+)
+
 // Device 22 offers 16 kHz, S24_3LE, 4 channels; ch0 and ch1 are the microphones, ch2 and ch3 read silent with nothing playing.
 const (
 	Channels      = 1
 	CaptureDevice = 0
+	Format        = alsa.FormatS16_LE
+	Bits          = 16
 )
 
 const Mics = 1
