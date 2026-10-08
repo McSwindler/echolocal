@@ -25,7 +25,11 @@ func newLEDCmd() *cobra.Command {
 	)
 	c.PersistentFlags().StringVar(&path, "path", led.DefaultPath, "is31fl3236 sysfs directory")
 
-	ring := func() *led.Ring { return &led.Ring{Path: path} }
+	ring := func() *led.Ring {
+		r := led.Ring{Path: path}
+		r.SetBootAnimation(false)
+		return &r
+	}
 
 	fill := &cobra.Command{
 		Use:   "fill <0-255>",

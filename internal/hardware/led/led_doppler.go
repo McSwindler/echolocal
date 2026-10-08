@@ -1,4 +1,4 @@
-//go:build !board_doppler
+//go:build board_doppler
 
 // Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes.
 //
@@ -9,7 +9,6 @@ package led
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strconv"
@@ -20,13 +19,22 @@ import (
 )
 
 // DefaultPath is the is31fl3236 i2c device directory.
-const DefaultPath = "/sys/bus/i2c/devices/0-003f"
+const DefaultPath = "/sys/class/i2c-dev/i2c-2/device"
 
 // Channels is the number of PWM outputs: 12 ring segments x RGB.
 const Channels = 36
 
 // Segments is the number of addressable RGB positions on the ring.
 const Segments = 12
+
+var chips = [4]string{"2-0032", "2-0033", "2-0034", "2-0035"}
+
+var chipOrder = [4][9]int{
+	{0x16, 0x17, 0x13, 0x14, 0x10, 0x11, 0x15, 0x12, 0x0f}, // segments 5,6,7
+	{0x04, 0x05, 0x01, 0x02, 0x22, 0x23, 0x03, 0x00, 0x21}, // segments 0,1,11
+	{0x1c, 0x1d, 0x1f, 0x20, 0x19, 0x1a, 0x1b, 0x1e, 0x18}, // segments 8,9,10
+	{0x0d, 0x0e, 0x0a, 0x0b, 0x07, 0x08, 0x0c, 0x09, 0x06}, // segments 2,3,4
+}
 
 // Layout, established by walking channels and then segments:
 //
@@ -125,8 +133,14 @@ func (r *Ring) SetFrame(vals []byte) error {
 	if bytes.Equal(vals, r.last) {
 		return nil
 	}
-	if err := os.WriteFile(r.attr("frame"), []byte(hex.EncodeToString(vals)+"\n"), 0o644); err != nil {
-		return err
+	for i, chip := range chips {
+		parts := make([]string, 9)
+		for n, idx := range chipOrder[i] {
+			parts[n] = strconv.Itoa(int(vals[idx]))
+		}
+		if err := os.WriteFile(r.attr(chip+"/all_leds"), []byte(strings.Join(parts, " ")), 0o644); err != nil {
+			return err
+		}
 	}
 
 	r.last = append(r.last[:0], vals...)
@@ -147,11 +161,11 @@ func (r *Ring) Frame() ([]byte, error) {
 	if r.absent {
 		return make([]byte, Channels), nil
 	}
-	b, err := os.ReadFile(r.attr("frame"))
-	if err != nil {
-		return nil, err
-	}
-	return hex.DecodeString(strings.TrimSpace(string(b)))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]byte, Channels)
+	copy(out, r.last)
+	return out, nil
 }
 
 // Fill sets every channel to the same value.
@@ -166,12 +180,16 @@ func (r *Ring) Fill(v byte) error {
 // Off blanks the ring.
 func (r *Ring) Off() error { return r.Fill(0) }
 
+func (r *Ring) currentAttr(chip, channel int) string {
+	return r.attr(fmt.Sprintf("%s/leds/lp5523:%d:channel%d/led_current", chips[chip], chip, channel))
+}
+
 // Current reads the global drive-current setting.
 func (r *Ring) Current() (int, error) {
 	if r.absent {
 		return 0, nil
 	}
-	b, err := os.ReadFile(r.attr("led_current"))
+	b, err := os.ReadFile(r.currentAttr(0, 0))
 	if err != nil {
 		return 0, err
 	}
@@ -180,10 +198,7 @@ func (r *Ring) Current() (int, error) {
 
 // SetCurrent sets the global drive current.
 func (r *Ring) SetCurrent(v int) error {
-	if r.absent {
-		return nil
-	}
-	return os.WriteFile(r.attr("led_current"), []byte(strconv.Itoa(v)), 0o644)
+	return nil
 }
 
 // SetBootAnimation toggles the driver's built-in boot animation.
@@ -191,9 +206,16 @@ func (r *Ring) SetBootAnimation(on bool) error {
 	if r.absent {
 		return nil
 	}
-	v := "0"
+	mode := "disabled"
 	if on {
-		v = "1"
+		mode = "run"
 	}
-	return os.WriteFile(r.attr("boot_animation"), []byte(v), 0o644)
+	for _, chip := range chips {
+		for e := 1; e <= 3; e++ {
+			if err := os.WriteFile(r.attr(fmt.Sprintf("%s/engine%d_mode", chip, e)), []byte(mode), 0o644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
